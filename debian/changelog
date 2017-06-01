@@ -1,0 +1,5 @@
+gmailieer (0.1+git20170701+9d03eea-1) experimental; urgency=low
+
+  * Initial upload (Closes: #863863)
+
+ -- Julian Andres Klode <jak@debian.org>  Thu, 01 Jun 2017 23:53:00 +0200

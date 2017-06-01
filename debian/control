@@ -1,0 +1,27 @@
+Source: gmailieer
+Section: mail
+Priority: extra
+Maintainer: Julian Andres Klode <jak@debian.org>
+Build-Depends: debhelper (>= 10), python3, python3-setuptools
+Standards-Version: 4.0.0
+Homepage: https://github.com/gauteh/gmailieer
+Vcs-Git: https://anonscm.debian.org/git/anonscm/gmailieer.git
+Vcs-Browser: https://anonscm.debian.org/git/anonscm/gmailieer.git
+
+Package: gmailieer
+Architecture: all
+Depends: python3-googleapi,
+         python3-notmuch (>= 0.25),
+         python3-oauth2client,
+         python3-tqdm,
+         ${misc:Depends},
+         ${python3:Depends}
+Description: Fast fetch and two-way tag synchronization between notmuch and GMail
+ This program can pull email and labels (and changes to labels) from your
+ GMail account and store them locally in a maildir with the labels synchronized
+ with a notmuch database. The changes to tags in the notmuch database may be
+ pushed back remotely to your GMail account.
+ .
+ It will not and can not:
+ * Add or delete messages on your remote account
+ * Modify messages other than their labels
