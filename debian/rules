@@ -1,3 +1,6 @@
 #!/usr/bin/make -f
+
+export PYBUILD_INSTALL_ARGS=--install-lib=/usr/share/gmailieer/ --install-scripts=/usr/share/gmailieer/
+
 %:
 	dh $@ --without python2 --with python3 --buildsystem=pybuild
