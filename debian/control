@@ -2,7 +2,13 @@ Source: gmailieer
 Section: mail
 Priority: extra
 Maintainer: Julian Andres Klode <jak@debian.org>
-Build-Depends: debhelper (>= 10), python3, python3-setuptools
+Build-Depends: debhelper (>= 10),
+               python3,
+               python3-googleapi,
+               python3-notmuch (>= 0.25),
+               python3-oauth2client,
+               python3-setuptools,
+               python3-tqdm
 Standards-Version: 4.0.0
 Homepage: https://github.com/gauteh/gmailieer
 Vcs-Git: https://anonscm.debian.org/git/anonscm/gmailieer.git
