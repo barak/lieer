@@ -1,6 +1,6 @@
 Source: gmailieer
 Section: mail
-Priority: extra
+Priority: optional
 Maintainer: Julian Andres Klode <jak@debian.org>
 Build-Depends: debhelper (>= 10),
                python3,
