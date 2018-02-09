@@ -58,7 +58,7 @@ class Remote:
                         'CATEGORY_SOCIAL',
                         'CATEGORY_PROMOTIONS',
                         'CATEGORY_UPDATES',
-                        'CATEGORY_FORUMS'
+                        'CATEGORY_FORUMS',
                       ])
   # query to use
   query = '-in:chats'
@@ -68,12 +68,19 @@ class Remote:
   # used to indicate whether all messages that should be updated where updated
   all_updated = True
 
-  # Handle exponential back-offs in get_message and __push_tags__. get_messages implements
-  # its own.
+  # Handle exponential back-offs in non-batch requests.
   _delay     = 0
-  MAX_DELAY  = 100
   _delay_ok  = 0
+  MAX_DELAY  = 100
   MAX_CONNECTION_ERRORS = 20
+
+  ## Batch requests should generally be of size 50, and at most 100. Best overall
+  ## performance is likely to be at 50 since we will not be throttled.
+  ##
+  ## * https://developers.google.com/gmail/api/guides/batch
+  ## * https://developers.google.com/gmail/api/v1/reference/quota
+  BATCH_REQUEST_SIZE     = 50
+  MIN_BATCH_REQUEST_SIZE = 1
 
   class BatchException (Exception):
     pass
@@ -82,6 +89,9 @@ class Remote:
     pass
 
   class GenericException (Exception):
+    pass
+
+  class NoHistoryException (Exception):
     pass
 
   def __init__ (self, g):
@@ -120,7 +130,7 @@ class Remote:
         print ("remote: request failed, increasing delay between requests to: %d s" % self._delay)
       else:
         print ("remote: increased delay to more than maximum of %d s." % self.MAX_DELAY)
-        raise GenericException ("cannot increase delay more to more than maximum %d s" % self.MAX_DELAY)
+        raise Remote.GenericException ("cannot increase delay more to more than maximum %d s" % self.MAX_DELAY)
 
 
 
@@ -129,10 +139,10 @@ class Remote:
     results = self.service.users ().labels ().list (userId = self.account).execute ()
     labels = results.get ('labels', [])
 
-    self.labels = {}
-    self.invlabels = {}
+    self.labels     = {}
+    self.invlabels  = {}
     for l in labels:
-      self.labels[l['id']] = l['name']
+      self.labels[l['id']]      = l['name']
       self.invlabels[l['name']] = l['id']
 
     return self.labels
@@ -161,7 +171,7 @@ class Remote:
   @__require_auth__
   def get_history_since (self, start):
     """
-    Get all changed since start historyId
+    Get all changes since start historyId
     """
     self.__wait_delay__ ()
     results = self.service.users ().history ().list (userId = self.account, startHistoryId = start).execute ()
@@ -182,8 +192,9 @@ class Remote:
         results = _results
         yield results['history']
       else:
-        print ("remote: no 'history' when several pages were indicated, waiting..")
+        print ("remote: no 'history' when more pages were indicated.")
         self.__request_done__ (False)
+        raise Remote.NoHistoryException ()
 
   @__require_auth__
   def all_messages (self, limit = None):
@@ -209,17 +220,18 @@ class Remote:
         results = _results
         yield (results['resultSizeEstimate'], results['messages'])
       else:
-        self.__request_done__ (False)
-        print ("remote: no messages when several pages were indicated, waiting..")
+        self.__request_done__ (True)
+        print ("remote: warning: no messages when several pages were indicated.")
+        break
 
   @__require_auth__
-  def get_messages (self, mids, cb, format):
+  def get_messages (self, gids, cb, format):
     """
     Get the messages
     """
 
-    max_req = 200
-    N       = len (mids)
+    max_req = self.BATCH_REQUEST_SIZE
+    N       = len (gids)
     i       = 0
     j       = 0
 
@@ -230,13 +242,21 @@ class Remote:
 
     conn_errors         = 0
 
+    msg_batch = [] # queue up received batch and send in one go to content / db routine
+
     def _cb (rid, resp, excep):
-      nonlocal j
+      nonlocal j, msg_batch
       if excep is not None:
         if type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 404:
           # message could not be found this is probably a deleted message, spam or draft
           # message since these are not included in the messages.get() query by default.
-          print ("remote: could not find remote message: %s!" % mids[j])
+          print ("remote: could not find remote message: %s!" % gids[j])
+          j += 1
+          return
+
+        elif type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 400:
+          # message id invalid, probably caused by stray files in the mail repo
+          print ("remote: message id: %s is invalid! are there any non-gmailieer files created in the gmailieer repository?" % gids[j])
           j += 1
           return
 
@@ -248,7 +268,7 @@ class Remote:
       else:
         j += 1
 
-      cb (resp)
+      msg_batch.append (resp)
 
     while i < N:
       n = 0
@@ -256,9 +276,9 @@ class Remote:
       batch = self.service.new_batch_http_request  (callback = _cb)
 
       while n < max_req and i < N:
-        mid = mids[i]
+        gid = gids[i]
         batch.add (self.service.users ().messages ().get (userId = self.account,
-          id = mid, format = format))
+          id = gid, format = format))
         n += 1
         i += 1
 
@@ -286,7 +306,7 @@ class Remote:
         i = j # reset
 
       except Remote.BatchException as ex:
-        if max_req > 10:
+        if max_req > self.MIN_BATCH_REQUEST_SIZE:
           max_req = max_req / 2
           i = j # reset
           print ("reducing batch request size to: %d" % max_req)
@@ -304,20 +324,26 @@ class Remote:
           print ("too many connection errors")
           raise
 
+      finally:
+        # handle batch
+        if len(msg_batch) > 0:
+          cb (msg_batch)
+          msg_batch.clear ()
+
   @__require_auth__
-  def get_message (self, mid, format = 'minimal'):
+  def get_message (self, gid, format = 'minimal'):
     """
     Get a single message
     """
     self.__wait_delay__ ()
     try:
       result = self.service.users ().messages ().get (userId = self.account,
-          id = mid, format = format).execute ()
+          id = gid, format = format).execute ()
 
     except googleapiclient.errors.HttpError as excep:
-      if excep.resp.code == 403 or excep.resp.code == 500:
+      if excep.resp.status == 403 or excep.resp.status == 500:
         self.__request_done__ (False)
-        return self.get_message (mid, format)
+        return self.get_message (gid, format)
       else:
         raise
 
@@ -405,24 +431,37 @@ class Remote:
     # settle unless there's been any local changes.
     #
 
-    mid    = gmsg['id']
+    gid    = gmsg['id']
 
     found = False
     for f in nmsg.get_filenames ():
-      if mid in f:
+      if gid in f:
         found = True
 
     # this can happen if a draft is edited remotely and is synced before it is sent. we'll
     # just skip it and it should be resolved on the next pull.
     if not found:
-      print ("update: gid does not match any file name of message, probably a draft, skipping: %s" % mid)
+      print ("update: gid does not match any file name of message, probably a draft, skipping: %s" % gid)
       return None
 
-    labels = gmsg.get('labelIds', [])
-    labels = [self.labels[l] for l in labels]
+    glabels = gmsg.get('labelIds', [])
+
+    # translate labels. Remote.get_labels () must have been called first
+    labels = []
+    for l in glabels:
+      ll = self.labels.get(l, None)
+
+      if ll is None and not self.gmailieer.local.state.drop_non_existing_label:
+        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/gmailieer/issues/48)"
+        print (err)
+        raise Remote.GenericException (err)
+      elif ll is None:
+        pass # drop
+      else:
+        labels.append (ll)
 
     # remove ignored labels
-    labels = set (labels)
+    labels = set(labels)
     labels = labels - self.ignore_labels
 
     # translate to notmuch tags
@@ -456,35 +495,35 @@ class Remote:
       hist_id = int(gmsg['historyId'])
       if hist_id > last_hist:
         if not force:
-          print ("update: remote has changed, will not update: %s (add: %s, rem: %s) (%d > %d)" % (mid, add, rem, hist_id, last_hist))
+          print ("update: remote has changed, will not update: %s (add: %s, rem: %s) (%d > %d)" % (gid, add, rem, hist_id, last_hist))
           self.all_updated = False
           return None
 
       if 'TRASH' in add:
         if 'SPAM' in add:
-          print ("update: %s: Trying to add both TRASH and SPAM, dropping SPAM (add: %s, rem: %s)" % (mid, add, rem))
+          print ("update: %s: Trying to add both TRASH and SPAM, dropping SPAM (add: %s, rem: %s)" % (gid, add, rem))
           add.remove('SPAM')
         if 'INBOX' in add:
-          print ("update: %s: Trying to add both TRASH and INBOX, dropping INBOX (add: %s, rem: %s)" % (mid, add, rem))
+          print ("update: %s: Trying to add both TRASH and INBOX, dropping INBOX (add: %s, rem: %s)" % (gid, add, rem))
           add.remove('INBOX')
       elif 'SPAM' in add:
         if 'INBOX' in add:
-          print ("update: %s: Trying to add both SPAM and INBOX, dropping INBOX (add: %s, rem: %s)" % (mid, add, rem))
+          print ("update: %s: Trying to add both SPAM and INBOX, dropping INBOX (add: %s, rem: %s)" % (gid, add, rem))
           add.remove('INBOX')
 
       if self.dry_run:
-        print ("(dry-run) mid: %s: add: %s, remove: %s" % (mid, str(add), str(rem)))
+        print ("(dry-run) gid: %s: add: %s, remove: %s" % (gid, str(add), str(rem)))
         return None
       else:
-        return self.__push_tags__ (mid, add, rem)
+        return self.__push_tags__ (gid, add, rem)
 
     else:
       return None
 
   @__require_auth__
-  def __push_tags__ (self, mid, add, rem):
+  def __push_tags__ (self, gid, add, rem):
     """
-    Push message changes (these are currently not batched)"
+    Push message changes
     """
 
     _add = []
@@ -505,14 +544,14 @@ class Remote:
              'removeLabelIds' : _rem }
 
     return self.service.users ().messages ().modify (userId = self.account,
-          id = mid, body = body)
+          id = gid, body = body)
 
   @__require_auth__
   def push_changes (self, actions, cb):
     """
     Push label changes
     """
-    max_req = 200
+    max_req = self.BATCH_REQUEST_SIZE
     N       = len (actions)
     i       = 0
     j       = 0
@@ -528,7 +567,13 @@ class Remote:
         if type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 404:
           # message could not be found this is probably a deleted message, spam or draft
           # message since these are not included in the messages.get() query by default.
-          print ("remote: could not find remote message: %s!" % mids[j])
+          print ("remote: could not find remote message: %s!" % gids[j])
+          j += 1
+          return
+
+        elif type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 400:
+          # message id invalid, probably caused by stray files in the mail repo
+          print ("remote: message id: %s is invalid! are there any non-gmailieer files created in the gmailieer repository?" % gids[j])
           j += 1
           return
 
@@ -575,7 +620,7 @@ class Remote:
         i = j # reset
 
       except Remote.BatchException as ex:
-        if max_req > 10:
+        if max_req > self.MIN_BATCH_REQUEST_SIZE:
           max_req = max_req / 2
           i = j # reset
           print ("reducing batch request size to: %d" % max_req)
@@ -608,7 +653,7 @@ class Remote:
         return (lr['id'], l)
 
       except googleapiclient.errors.HttpError as excep:
-        if excep.resp.code == 403 or excep.resp.code == 500:
+        if excep.resp.status == 403 or excep.resp.status == 500:
           self.__request_done__ (False)
           return self.__create_label__ (l)
         else:

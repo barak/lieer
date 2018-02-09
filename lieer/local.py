@@ -1,4 +1,4 @@
-import os
+import os, shutil
 import json
 import base64
 import configparser
@@ -13,15 +13,15 @@ class Local:
 
 
   translate_labels = {
-                      'INBOX' : 'inbox',
-                      'SPAM' : 'spam',
-                      'TRASH' : 'trash',
-                      'UNREAD' : 'unread',
-                      'STARRED' : 'flagged',
+                      'INBOX'     : 'inbox',
+                      'SPAM'      : 'spam',
+                      'TRASH'     : 'trash',
+                      'UNREAD'    : 'unread',
+                      'STARRED'   : 'flagged',
                       'IMPORTANT' : 'important',
-                      'SENT' : 'sent',
-                      'DRAFT' : 'draft',
-                      'CHAT'  : 'chat'
+                      'SENT'      : 'sent',
+                      'DRAFT'     : 'draft',
+                      'CHAT'      : 'chat'
                       }
 
   labels_translate = { v: k for k, v in translate_labels.items () }
@@ -35,6 +35,8 @@ class Local:
                         'replied',
                         'muted',
                         'mute',
+                        'todo',
+                        'Trash',
                         ])
 
   class RepositoryException (Exception):
@@ -53,6 +55,7 @@ class Local:
     replace_slash_with_dot = False
     account = None
     timeout = 5
+    drop_non_existing_label = False
 
     def __init__ (self, state_f):
       self.state_f = state_f
@@ -68,6 +71,7 @@ class Local:
       self.replace_slash_with_dot = self.json.get ('replace_slash_with_dot', False)
       self.account = self.json.get ('account', 'me')
       self.timeout = self.json.get ('timeout', 0)
+      self.drop_non_existing_label = self.json.get ('drop_non_existing_label', False)
 
     def write (self):
       self.json = {}
@@ -77,6 +81,10 @@ class Local:
       self.json['replace_slash_with_dot'] = self.replace_slash_with_dot
       self.json['account'] = self.account
       self.json['timeout'] = self.timeout
+      self.json['drop_non_existing_label'] = self.drop_non_existing_label
+
+      if os.path.exists (self.state_f):
+        shutil.copyfile (self.state_f, self.state_f + '.bak')
 
       with tempfile.NamedTemporaryFile (mode = 'w+', dir = os.path.dirname (self.state_f), delete = False) as fd:
         json.dump (self.json, fd)
@@ -102,6 +110,10 @@ class Local:
       self.replace_slash_with_dot = r
       self.write ()
 
+    def set_drop_non_existing_label (self, r):
+      self.drop_non_existing_label = r
+      self.write ()
+
   def __init__ (self, g):
     self.gmailieer = g
     self.wd = os.getcwd ()
@@ -112,7 +124,7 @@ class Local:
     self.credentials_f = os.path.join (self.wd, '.credentials.gmailieer.json')
 
     # mail store
-    self.md = os.path.join (self.wd, 'mail', 'cur')
+    self.md = os.path.join (self.wd, 'mail')
 
   def load_repository (self):
     """
@@ -127,37 +139,43 @@ class Local:
 
     self.state = Local.State (self.state_f)
 
-    # NOTE:
-    # this list is used for .has () to figure out what messages we have
-    # hopefully this won't grow too gigantic with lots of messages.
-    self.files = []
-    for (dp, dirnames, fnames) in os.walk (self.md):
-      self.files.extend (fnames)
-      break
-
-    # exclude files that are unlikely to be real message files
-    self.files = [ f for f in self.files if f[0] != '.' ]
-
-    self.mids = {}
-    for f in self.files:
-      m = f.split (':')[0]
-      self.mids[m] = f
-
     ## Check if we are in the notmuch db
     with notmuch.Database () as db:
       try:
-        self.nm_dir  = db.get_directory (os.path.abspath(os.path.join (self.md, '..')))
+        self.nm_dir  = db.get_directory (os.path.abspath(self.md))
         if self.nm_dir is not None:
           self.nm_dir = self.nm_dir.path
         else:
           # probably empty dir
-          self.nm_dir = os.path.abspath (os.path.join (self.md, '..'))
+          self.nm_dir = os.path.abspath (self.md)
 
         self.nm_relative = self.nm_dir[len(db.get_path ())+1:]
 
       except notmuch.errors.FileError:
         raise Local.RepositoryException ("local mail repository not in notmuch db")
 
+    ## The Cache:
+    ##
+    ## this cache is used to know which messages we have a physical copy of.
+    ## hopefully this won't grow too gigantic with lots of messages.
+    self.files = []
+    for (dp, dirnames, fnames) in os.walk (os.path.join (self.md, 'cur')):
+      _fnames = ( 'cur/' + f for f in fnames )
+      self.files.extend (_fnames)
+      break
+
+    for (dp, dirnames, fnames) in os.walk (os.path.join (self.md, 'new')):
+      _fnames = ( 'new/' + f for f in fnames )
+      self.files.extend (_fnames)
+      break
+
+    # exclude files that are unlikely to be real message files
+    self.files = [ f for f in self.files if os.path.basename(f)[0] != '.' ]
+
+    self.gids = {}
+    for f in self.files:
+      m = os.path.basename(f).split (':')[0]
+      self.gids[m] = f
 
     # load notmuch config
     cfg = os.environ.get('NOTMUCH_CONFIG', os.path.expanduser('~/.notmuch-config'))
@@ -189,29 +207,63 @@ class Local:
     self.state.replace_slash_with_dot = replace_slash_with_dot
     self.state.account = account
     self.state.write ()
-    os.makedirs (self.md)
-    os.makedirs (os.path.join (self.md, '../new'))
-    os.makedirs (os.path.join (self.md, '../tmp'))
+    os.makedirs (os.path.join (self.md, 'cur'))
+    os.makedirs (os.path.join (self.md, 'new'))
+    os.makedirs (os.path.join (self.md, 'tmp'))
 
   def has (self, m):
-    return m in self.mids
+    """ Check whether we have message id """
+    return (m in self.gids)
 
-  def hasf (self, fname):
-    """ Check whether message file is in repository """
+  def contains (self, fname):
+    """ Check whether message file exists is in repository """
     return ( Path(self.md) in Path(fname).parents )
 
-  def fnames_to_gids (self, msgs):
+  def __update_cache__ (self, nmsg, old = None):
+    """
+    Update cache with filenames from nmsg, removing the old:
+
+      nmsg - NotmuchMessage
+      old  - tuple of old gid and old fname
+    """
+
+    # remove old file from cache
+    if old is not None:
+      (old_gid, old_f) = old
+
+      old_f = Path (old_f)
+      self.files.remove (os.path.join (old_f.parent.name, old_f.name))
+      self.gids.pop (old_gid)
+
+    # add message to cache
+    for _f in nmsg.get_filenames ():
+      if self.contains (_f):
+        new_f = Path (_f)
+
+        # there might be more GIDs (and files) for each NotmuchMessage, if so,
+        # the last matching file will be used in the gids map.
+
+        _m = new_f.name.split (':')[0]
+        self.gids[_m] = os.path.join (new_f.parent.name, new_f.name)
+        self.files.append (os.path.join (new_f.parent.name, new_f.name))
+
+  def messages_to_gids (self, msgs):
+    """
+    Gets GIDs from a list of NotmuchMessages, the returned list of tuples may contain
+    the same NotmuchMessage several times for each matching file. Files outside the
+    repository are filtered out.
+    """
     gids     = []
     messages = []
 
     for m in msgs:
       for fname in m.get_filenames ():
-        if not self.hasf (fname):
+        if not self.contains (fname):
           print ("'%s' is not in this repository, ignoring." % fname)
         else:
           # get gmail id
-          mid = os.path.basename (fname).split (':')[0]
-          gids.append (mid)
+          gid = os.path.basename (fname).split (':')[0]
+          gids.append (gid)
           messages.append (m)
 
     return (messages, gids)
@@ -229,54 +281,63 @@ class Local:
     if 'STARRED' in labels:
       info += 'F'
 
-    if 'TRASH' in labels:
-      info += 'T'
+    ## notmuch does not add 'T', so it will only be removed at the next
+    ## maildir sync flags anyway.
+
+    # if 'TRASH' in labels:
+    #   info += 'T'
 
     if not 'UNREAD' in labels:
       info += 'S'
 
     return p + info
 
-  def remove (self, mid, db):
+  def remove (self, gid, db):
     """
     Remove message from local store
     """
-    fname = self.mids.get (mid, None)
+    fname  = self.gids.get (gid, None)
+    ffname = fname
 
     if fname is None:
-      print ("remove: message does not exist in store: %s" % mid)
+      print ("remove: message does not exist in store: %s" % gid)
       return
 
     fname = os.path.join (self.md, fname)
     nmsg  = db.find_message_by_filename (fname)
 
     if self.dry_run:
-      print ("(dry-run) deleting %s: %s." % (mid, fname))
+      print ("(dry-run) deleting %s: %s." % (gid, fname))
     else:
       if nmsg is not None:
         db.remove_message (fname)
       os.unlink (fname)
 
-    f = self.mids[mid]
-    self.files.remove (f)
-    self.mids.pop (mid)
+      self.files.remove (ffname)
+      self.gids.pop (gid)
 
   def store (self, m, db):
     """
     Store message in local store
     """
 
-    mid     = m['id']
+    gid     = m['id']
     msg_str = base64.urlsafe_b64decode(m['raw'].encode ('ASCII'))
+
+    # messages from GMail have windows line endings
+    if os.linesep == '\n':
+      msg_str = msg_str.replace (b'\r\n', b'\n')
 
     labels  = m.get('labelIds', [])
 
-    bname = self.__make_maildir_name__(mid, labels)
-    self.files.append (bname)
-    self.mids[mid] = bname
+    bname = self.__make_maildir_name__(gid, labels)
 
-    p       = os.path.join (self.md, bname)
-    tmp_p   = os.path.join (self.md, '../tmp', bname)
+    # add to cache
+    self.files.append (os.path.join ('cur', bname))
+    self.gids[gid] = os.path.join ('cur', bname)
+
+    p       = os.path.join (self.md, 'cur', bname)
+    tmp_p   = os.path.join (self.md, 'tmp', bname)
 
     if os.path.exists (p):
       raise Local.RepositoryException ("local file already exists: %s" % p)
@@ -295,15 +356,25 @@ class Local:
 
   def update_tags (self, m, fname, db):
     # make sure notmuch tags reflect gmail labels
-    mid = m['id']
-    labels = m.get('labelIds', [])
+    gid = m['id']
+    glabels = m.get('labelIds', [])
 
     # translate labels. Remote.get_labels () must have been called first
-    labels = [self.gmailieer.remote.labels[l] for l in labels]
+    labels = []
+    for l in glabels:
+      ll = self.gmailieer.remote.labels.get(l, None)
 
-    labels = set(labels)
+      if ll is None and not self.state.drop_non_existing_label:
+        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/gmailieer/issues/48)"
+        print (err)
+        raise Local.RepositoryException (err)
+      elif ll is None:
+        pass # drop
+      else:
+        labels.append (ll)
 
     # remove ignored labels
+    labels = set(labels)
     labels = list(labels - self.gmailieer.remote.ignore_labels)
 
     # translate to notmuch tags
@@ -315,10 +386,13 @@ class Local:
 
     if fname is None:
       # this file hopefully already exists and just needs it tags updated,
-      # let's try to find its name in the mid to fname table.
-      fname = self.mids[mid]
+      # let's try to find its name in the gid to fname table.
+      fname = os.path.join (self.md, self.gids[gid])
 
-    fname = os.path.join (self.md, fname)
+    else:
+      # new file
+      fname = os.path.join (self.md, 'cur', fname)
+
     nmsg  = db.find_message_by_filename (fname)
 
     if not os.path.exists (fname):
@@ -329,10 +403,13 @@ class Local:
 
     if nmsg is None:
       if self.dry_run:
-        print ("(dry-run) adding message: %s: %s, with tags: %s" % (mid, fname, str(labels)))
+        print ("(dry-run) adding message: %s: %s, with tags: %s" % (gid, fname, str(labels)))
       else:
         try:
-          (nmsg, stat) = db.add_message (fname, True)
+          if hasattr (notmuch.Database, 'index_file'):
+            (nmsg, stat) = db.index_file (fname, True)
+          else:
+            (nmsg, stat) = db.add_message (fname, True)
         except notmuch.errors.FileNotEmailError:
           print('%s is not an email' % fname)
           return True
@@ -346,6 +423,8 @@ class Local:
           nmsg.add_tag (t, True)
 
         nmsg.thaw ()
+        nmsg.tags_to_maildir_flags ()
+        self.__update_cache__ (nmsg)
 
       return True
 
@@ -358,22 +437,18 @@ class Local:
         labels.extend (igntags) # add back local ignored tags before adding
         if not self.dry_run:
           nmsg.freeze ()
+
           nmsg.remove_all_tags ()
           for t in labels:
             nmsg.add_tag (t, False)
-          nmsg.thaw ()
-          nmsg.tags_to_maildir_flags ()
 
-          # update message list
-          for _f in nmsg.get_filenames ():
-            if self.hasf (_f):
-              self.mids[mid] = os.path.basename (_f)
-              self.files.remove (os.path.basename (fname))
-              self.files.append (os.path.basename(_f))
-              break
+          nmsg.thaw ()
+
+          nmsg.tags_to_maildir_flags ()
+          self.__update_cache__ (nmsg, (gid, fname))
 
         else:
-          print ("(dry-run) changing tags on message: %s from: %s to: %s" % (mid, str(otags), str(labels)))
+          print ("(dry-run) changing tags on message: %s from: %s to: %s" % (gid, str(otags), str(labels)))
 
         return True
       else:

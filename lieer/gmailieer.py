@@ -127,6 +127,13 @@ class Gmailieer:
     parser_set.add_argument ('--replace-slash-with-dot', action = 'store_true', default = False,
         help = 'This will replace \'/\' with \'.\' in gmail labels (make sure you realize the implications)')
 
+    parser_set.add_argument ('--no-replace-slash-with-dot', action = 'store_true', default = False)
+
+    parser_set.add_argument ('--drop-non-existing-labels', action = 'store_true', default = False,
+        help = 'Allow missing labels on the GMail side to be dropped (see https://github.com/gauteh/gmailieer/issues/48)')
+
+    parser_set.add_argument ('--no-drop-non-existing-labels', action = 'store_true', default = False)
+
     parser_set.set_defaults (func = self.set)
 
 
@@ -210,7 +217,7 @@ class Gmailieer:
 
       # print ("collecting changes..: %s" % qry)
       query = notmuch.Query (db, qry)
-      total = query.count_messages () # might be destructive here as well
+      total = query.count_messages () # probably destructive here as well
       query = notmuch.Query (db, qry)
 
       messages = list(query.search_messages ())
@@ -218,17 +225,18 @@ class Gmailieer:
         messages = messages[:self.limit]
 
       # get gids and filter out messages outside this repository
-      messages, gids = self.local.fnames_to_gids (messages)
+      messages, gids = self.local.messages_to_gids (messages)
 
       # get meta-data on changed messages from remote
       remote_messages = []
       bar = tqdm (leave = True, total = len(gids), desc = 'receiving metadata')
 
-      def _got_msg (m):
-        bar.update (1)
-        remote_messages.append (m)
+      def _got_msgs (ms):
+        for m in ms:
+          bar.update (1)
+          remote_messages.append (m)
 
-      self.remote.get_messages (gids, _got_msg, 'minimal')
+      self.remote.get_messages (gids, _got_msgs, 'minimal')
       bar.close ()
 
       # resolve changes
@@ -241,7 +249,7 @@ class Gmailieer:
       bar.close ()
 
       # remove no-ops
-      actions = [a for a in actions if a]
+      actions = [ a for a in actions if a ]
 
       # limit
       if self.limit is not None and len(actions) >= self.limit:
@@ -294,8 +302,8 @@ class Gmailieer:
     if self.list_labels:
       if self.remove or self.force or self.limit:
         raise argparse.ArgumentError ("-t cannot be specified together with -f, -r or --limit")
-      for l in self.remote.labels.values ():
-        print (l)
+      for k,l in self.remote.labels.items ():
+        print ("{0: <30} {1}".format (l, k))
       return
 
     if self.force:
@@ -333,16 +341,19 @@ class Gmailieer:
           break
 
     except googleapiclient.errors.HttpError as excep:
-      if bar is not None: bar.close ()
-
-      if excep.resp.code == 404:
+      if excep.resp.status == 404:
         print ("pull: historyId is too old, full sync required.")
         self.full_pull ()
         return
       else:
         raise
 
-    if bar is not None: bar.close ()
+    except Remote.NoHistoryException as excep:
+      print ("pull: failed, re-try in a bit.")
+      raise
+
+    finally:
+      if bar is not None: bar.close ()
 
     # figure out which changes need to be applied
     added_messages   = [] # added messages, if they are later deleted they will be
@@ -438,12 +449,12 @@ class Gmailieer:
     changed = False
     # fetching new messages
     if len (added_messages) > 0:
-      message_ids = [m['id'] for m in added_messages]
-      updated     = self.get_content (message_ids)
+      message_gids = [m['id'] for m in added_messages]
+      updated     = self.get_content (message_gids)
 
       # updated labels for the messages that already existed
-      needs_update_mid = list(set(message_ids) - set(updated))
-      needs_update = [m for m in added_messages if m['id'] in needs_update_mid]
+      needs_update_gid = list(set(message_gids) - set(updated))
+      needs_update = [m for m in added_messages if m['id'] in needs_update_gid]
       labels_changed.extend (needs_update)
 
       changed = True
@@ -489,19 +500,19 @@ class Gmailieer:
     # this list might grow gigantic for large quantities of e-mail, not really sure
     # about how much memory this will take. this is just a list of some
     # simple metadata like message ids.
-    message_ids = []
-    last_id     = self.remote.get_current_history_id (self.local.state.last_historyId)
+    message_gids = []
+    last_id      = self.remote.get_current_history_id (self.local.state.last_historyId)
 
     for mset in self.remote.all_messages ():
-      (total, mids) = mset
+      (total, gids) = mset
 
       bar.total = total
-      bar.update (len(mids))
+      bar.update (len(gids))
 
-      for m in mids:
-        message_ids.append (m['id'])
+      for m in gids:
+        message_gids.append (m['id'])
 
-      if self.limit is not None and len(message_ids) >= self.limit:
+      if self.limit is not None and len(message_gids) >= self.limit:
         break
 
     bar.close ()
@@ -511,8 +522,8 @@ class Gmailieer:
         raise argparse.ArgumentError ('--limit with --remove will cause lots of messages to be deleted')
 
       # removing files that have been deleted remotely
-      all_remote = set (message_ids)
-      all_local  = set (self.local.mids.keys ())
+      all_remote = set (message_gids)
+      all_local  = set (self.local.gids.keys ())
       remove     = list(all_local - all_remote)
       bar = tqdm (leave = True, total = len(remove), desc = 'removing deleted')
       with notmuch.Database (mode = notmuch.Database.MODE.READ_WRITE) as db:
@@ -522,12 +533,12 @@ class Gmailieer:
 
       bar.close ()
 
-    if len(message_ids) > 0:
+    if len(message_gids) > 0:
       # get content for new messages
-      updated = self.get_content (message_ids)
+      updated = self.get_content (message_gids)
 
       # get updated labels for the rest
-      needs_update = list(set(message_ids) - set(updated))
+      needs_update = list(set(message_gids) - set(updated))
       self.get_meta (needs_update)
     else:
       print ("pull: no messages.")
@@ -553,13 +564,13 @@ class Gmailieer:
       bar = tqdm (leave = True, total = len(msgids), desc = 'receiving metadata')
 
       # opening db for whole metadata sync
-      with notmuch.Database (mode = notmuch.Database.MODE.READ_WRITE) as db:
-        def _got_msg (m):
-          nonlocal db
-          bar.update (1)
-          self.local.update_tags (m, None, db)
+      def _got_msgs (ms):
+        with notmuch.Database (mode = notmuch.Database.MODE.READ_WRITE) as db:
+          for m in ms:
+            bar.update (1)
+            self.local.update_tags (m, None, db)
 
-        self.remote.get_messages (msgids, _got_msg, 'minimal')
+        self.remote.get_messages (msgids, _got_msgs, 'minimal')
 
       bar.close ()
 
@@ -577,22 +588,20 @@ class Gmailieer:
 
     """
 
-    need_content = []
-    for m in msgids:
-      if not self.local.has (m):
-        need_content.append (m)
+    need_content = [ m for m in msgids if not self.local.has (m) ]
 
     if len (need_content) > 0:
 
       bar = tqdm (leave = True, total = len(need_content), desc = 'receiving content')
 
-      def _got_msg (m):
-        bar.update (1)
-        # opening db per message since it takes some time to download each one
+      def _got_msgs (ms):
+        # opening db per message batch since it takes some time to download each one
         with notmuch.Database (mode = notmuch.Database.MODE.READ_WRITE) as db:
-          self.local.store (m, db)
+          for m in ms:
+            bar.update (1)
+            self.local.store (m, db)
 
-      self.remote.get_messages (need_content, _got_msg, 'raw')
+      self.remote.get_messages (need_content, _got_msgs, 'raw')
 
       bar.close ()
 
@@ -611,11 +620,21 @@ class Gmailieer:
     if args.replace_slash_with_dot:
       self.local.state.set_replace_slash_with_dot (args.replace_slash_with_dot)
 
+    if args.no_replace_slash_with_dot:
+      self.local.state.set_replace_slash_with_dot (not args.no_replace_slash_with_dot)
+
+    if args.drop_non_existing_labels:
+      self.local.state.set_drop_non_existing_label (args.drop_non_existing_labels)
+
+    if args.no_drop_non_existing_labels:
+      self.local.state.set_drop_non_existing_label (not args.no_drop_non_existing_labels)
+
     print ("Repository info:")
     print ("Account ...........: %s" % self.local.state.account)
     print ("Timeout ...........: %f" % self.local.state.timeout)
     print ("historyId .........: %d" % self.local.state.last_historyId)
     print ("lastmod ...........: %d" % self.local.state.lastmod)
+    print ("drop non labels ...:", self.local.state.drop_non_existing_label)
     print ("replace . with / ..:", self.local.state.replace_slash_with_dot)
 
 
