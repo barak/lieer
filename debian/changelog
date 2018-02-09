@@ -1,5 +1,5 @@
-gmailieer (0.2-1) unstable; urgency=low
+gmailieer (0.6-1) unstable; urgency=low
 
   * Initial upload (Closes: #863863)
 
- -- Julian Andres Klode <jak@debian.org>  Thu, 17 Aug 2017 22:12:56 +0200
+ -- Julian Andres Klode <jak@debian.org>  Fri, 09 Feb 2018 16:18:56 +0100
