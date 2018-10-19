@@ -1,3 +1,12 @@
+gmailieer (0.6-1.1) unstable; urgency=medium
+
+  * Add build dependency on dh-python (Closes: #896727)
+  * Bump to debhelper 11
+  * Bump policy, no changes required
+  * Non-maintainer upload.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 19 Oct 2018 17:00:58 +0100
+
 gmailieer (0.6-1) unstable; urgency=low
 
   * Initial upload (Closes: #863863)
