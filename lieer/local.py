@@ -1,4 +1,4 @@
-import os, shutil
+import os, shutil, fcntl
 import json
 import base64
 import configparser
@@ -6,12 +6,14 @@ from pathlib import Path
 import tempfile
 
 import notmuch
+from .remote import Remote
 
 class Local:
   wd      = None
   loaded  = False
 
 
+  # NOTE: Update README when changing this map.
   translate_labels = {
                       'INBOX'     : 'inbox',
                       'SPAM'      : 'spam',
@@ -21,7 +23,13 @@ class Local:
                       'IMPORTANT' : 'important',
                       'SENT'      : 'sent',
                       'DRAFT'     : 'draft',
-                      'CHAT'      : 'chat'
+                      'CHAT'      : 'chat',
+
+                      'CATEGORY_PERSONAL'     : 'personal',
+                      'CATEGORY_SOCIAL'       : 'social',
+                      'CATEGORY_PROMOTIONS'   : 'promotions',
+                      'CATEGORY_UPDATES'      : 'updates',
+                      'CATEGORY_FORUMS'       : 'forums',
                       }
 
   labels_translate = { v: k for k, v in translate_labels.items () }
@@ -30,13 +38,13 @@ class Local:
                         'attachment',
                         'encrypted',
                         'signed',
-                        'new',
                         'passed',
                         'replied',
                         'muted',
                         'mute',
                         'todo',
                         'Trash',
+                        'voicemail',
                         ])
 
   class RepositoryException (Exception):
@@ -54,8 +62,10 @@ class Local:
 
     replace_slash_with_dot = False
     account = None
-    timeout = 5
+    timeout = 0
     drop_non_existing_label = False
+    ignore_tags = None
+    ignore_remote_labels = None
 
     def __init__ (self, state_f):
       self.state_f = state_f
@@ -72,6 +82,8 @@ class Local:
       self.account = self.json.get ('account', 'me')
       self.timeout = self.json.get ('timeout', 0)
       self.drop_non_existing_label = self.json.get ('drop_non_existing_label', False)
+      self.ignore_tags = set(self.json.get ('ignore_tags', []))
+      self.ignore_remote_labels = set(self.json.get ('ignore_remote_labels', Remote.DEFAULT_IGNORE_LABELS))
 
     def write (self):
       self.json = {}
@@ -82,6 +94,8 @@ class Local:
       self.json['account'] = self.account
       self.json['timeout'] = self.timeout
       self.json['drop_non_existing_label'] = self.drop_non_existing_label
+      self.json['ignore_tags'] = list(self.ignore_tags)
+      self.json['ignore_remote_labels'] = list(self.ignore_remote_labels)
 
       if os.path.exists (self.state_f):
         shutil.copyfile (self.state_f, self.state_f + '.bak')
@@ -114,6 +128,22 @@ class Local:
       self.drop_non_existing_label = r
       self.write ()
 
+    def set_ignore_tags (self, t):
+      if len(t.strip ()) == 0:
+        self.ignore_tags = set()
+      else:
+        self.ignore_tags = set([ tt.strip () for tt in t.split(',') ])
+
+      self.write ()
+
+    def set_ignore_remote_labels (self, t):
+      if len(t.strip ()) == 0:
+        self.ignore_remote_labels = set()
+      else:
+        self.ignore_remote_labels = set([ tt.strip () for tt in t.split(',') ])
+
+      self.write ()
+
   def __init__ (self, g):
     self.gmailieer = g
     self.wd = os.getcwd ()
@@ -139,6 +169,8 @@ class Local:
 
     self.state = Local.State (self.state_f)
 
+    self.ignore_labels = self.ignore_labels | self.state.ignore_tags
+
     ## Check if we are in the notmuch db
     with notmuch.Database () as db:
       try:
@@ -154,6 +186,28 @@ class Local:
       except notmuch.errors.FileError:
         raise Local.RepositoryException ("local mail repository not in notmuch db")
 
+    ## Lock repository
+    try:
+      self.lckf = open ('.lock', 'w')
+      fcntl.lockf (self.lckf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError:
+      raise Local.RepositoryException ("failed to lock repository (probably in use by another gmi instance)")
+
+    self.__load_cache__ ()
+
+    # load notmuch config
+    cfg = os.environ.get('NOTMUCH_CONFIG', os.path.expanduser('~/.notmuch-config'))
+    if not os.path.exists (cfg):
+      raise Local.RepositoryException("could not find notmuch-config: %s" % cfg)
+
+    self.nmconfig = configparser.ConfigParser ()
+    self.nmconfig.read (cfg)
+    self.new_tags = self.nmconfig['new']['tags'].split (';')
+    self.new_tags = [t.strip () for t in self.new_tags if len(t.strip()) > 0]
+
+    self.loaded = True
+
+  def __load_cache__ (self):
     ## The Cache:
     ##
     ## this cache is used to know which messages we have a physical copy of.
@@ -176,19 +230,6 @@ class Local:
     for f in self.files:
       m = os.path.basename(f).split (':')[0]
       self.gids[m] = f
-
-    # load notmuch config
-    cfg = os.environ.get('NOTMUCH_CONFIG', os.path.expanduser('~/.notmuch-config'))
-    if not os.path.exists (cfg):
-      raise Local.RepositoryException("could not find notmuch-config: %s" % cfg)
-
-    self.nmconfig = configparser.ConfigParser ()
-    self.nmconfig.read (cfg)
-    self.new_tags = self.nmconfig['new']['tags'].split (';')
-    self.new_tags = [t.strip () for t in self.new_tags if len(t.strip()) > 0]
-
-    self.loaded = True
-
 
   def initialize_repository (self, replace_slash_with_dot, account):
     """
@@ -393,13 +434,21 @@ class Local:
       # new file
       fname = os.path.join (self.md, 'cur', fname)
 
-    nmsg  = db.find_message_by_filename (fname)
-
     if not os.path.exists (fname):
-      if not self.dry_run:
-        raise Local.RepositoryException ("tried to update tags on non-existant file: %s" % fname)
-      else:
-        print ("(dry-run) tried to update tags on non-existant file: %s" % fname)
+      print ("missing file: reloading cache to check for changes..", end = '', flush = True)
+
+      self.__load_cache__ ()
+      fname = os.path.join (self.md, self.gids[gid])
+
+      print ("done.")
+
+      if not os.path.exists (fname):
+        if not self.dry_run:
+          raise Local.RepositoryException ("tried to update tags on non-existant file: %s" % fname)
+        else:
+          print ("(dry-run) tried to update tags on non-existant file: %s" % fname)
+
+    nmsg  = db.find_message_by_filename (fname)
 
     if nmsg is None:
       if self.dry_run:

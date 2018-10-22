@@ -9,7 +9,6 @@ from    oauth2client import tools
 import  googleapiclient
 import  notmuch
 
-from tqdm import tqdm, tqdm_gui
 
 from .remote import *
 from .local  import *
@@ -20,12 +19,15 @@ class Gmailieer:
     self.home = os.path.join (xdg_data_home, 'gmailieer')
 
   def main (self):
-    parser = argparse.ArgumentParser ('Gmailieer', parents = [tools.argparser])
+    parser = argparse.ArgumentParser ('gmi', parents = [tools.argparser])
     self.parser = parser
 
     common = argparse.ArgumentParser (add_help = False)
     common.add_argument ('-c', '--credentials', type = str, default = None,
         help = 'optional credentials file for google api')
+
+    common.add_argument ('-s', '--no-progress', action = 'store_true',
+        default = False, help = 'Disable progressbar (always off when output is not TTY)')
 
     subparsers = parser.add_subparsers (help = 'actions', dest = 'action')
     subparsers.required = True
@@ -119,13 +121,14 @@ class Gmailieer:
     # set option
     parser_set = subparsers.add_parser ('set',
         description = 'set option',
+        parents = [common],
         help = 'set options for repository')
 
     parser_set.add_argument ('-t', '--timeout', type = float,
-        default = None, help = 'Set HTTP timeout in seconds (0 means system timeout)')
+        default = None, help = 'Set HTTP timeout in seconds (0 means forever or system timeout)')
 
     parser_set.add_argument ('--replace-slash-with-dot', action = 'store_true', default = False,
-        help = 'This will replace \'/\' with \'.\' in gmail labels (make sure you realize the implications)')
+        help = 'This will replace \'/\' with \'.\' in gmail labels (Important: see the manual and make sure you realize the implications)')
 
     parser_set.add_argument ('--no-replace-slash-with-dot', action = 'store_true', default = False)
 
@@ -133,6 +136,12 @@ class Gmailieer:
         help = 'Allow missing labels on the GMail side to be dropped (see https://github.com/gauteh/gmailieer/issues/48)')
 
     parser_set.add_argument ('--no-drop-non-existing-labels', action = 'store_true', default = False)
+
+    parser_set.add_argument ('--ignore-tags-local', type = str,
+        default = None, help = 'Set custom tags to ignore when syncing from local to remote (comma-separated, after translations). Important: see the manual.')
+
+    parser_set.add_argument ('--ignore-tags-remote', type = str,
+        default = None, help = 'Set custom tags to ignore when syncing from remote to local (comma-separated, before translations). Important: see the manual.')
 
     parser_set.set_defaults (func = self.set)
 
@@ -168,9 +177,25 @@ class Gmailieer:
     self.remote.authorize (args.force)
 
   def setup (self, args, dry_run = False, load = False):
+    global tqdm
+
     # common options
     self.dry_run          = dry_run
+    self.HAS_TQDM         = (not args.no_progress)
     self.credentials_file = args.credentials
+
+    if self.HAS_TQDM:
+      if not (sys.stderr.isatty() and sys.stdout.isatty()):
+        self.HAS_TQDM = False
+      else:
+        try:
+          from tqdm import tqdm
+          self.HAS_TQDM = True
+        except ImportError:
+          self.HAS_TQDM = False
+
+    if not self.HAS_TQDM:
+      from .nobar import tqdm
 
     if self.dry_run:
       print ("dry-run: ", self.dry_run)
@@ -469,12 +494,12 @@ class Gmailieer:
     if len (labels_changed) > 0:
       lchanged = 0
       with notmuch.Database (mode = notmuch.Database.MODE.READ_WRITE) as db:
-        bar = tqdm (total = len(labels_changed), leave = True, desc = 'updating tags (0Δ)')
+        bar = tqdm (total = len(labels_changed), leave = True, desc = 'updating tags (0)')
         for m in labels_changed:
           r = self.local.update_tags (m, None, db)
           if r:
             lchanged += 1
-            bar.set_description ('updating tags (%dΔ)' % lchanged)
+            bar.set_description ('updating tags (%d)' % lchanged)
 
           bar.update (1)
         bar.close ()
@@ -570,7 +595,7 @@ class Gmailieer:
             bar.update (1)
             self.local.update_tags (m, None, db)
 
-        self.remote.get_messages (msgids, _got_msgs, 'minimal')
+      self.remote.get_messages (msgids, _got_msgs, 'minimal')
 
       bar.close ()
 
@@ -629,13 +654,21 @@ class Gmailieer:
     if args.no_drop_non_existing_labels:
       self.local.state.set_drop_non_existing_label (not args.no_drop_non_existing_labels)
 
-    print ("Repository info:")
+    if args.ignore_tags_local is not None:
+      self.local.state.set_ignore_tags (args.ignore_tags_local)
+
+    if args.ignore_tags_remote is not None:
+      self.local.state.set_ignore_remote_labels (args.ignore_tags_remote)
+
+    print ("Repository information and settings:")
     print ("Account ...........: %s" % self.local.state.account)
-    print ("Timeout ...........: %f" % self.local.state.timeout)
     print ("historyId .........: %d" % self.local.state.last_historyId)
     print ("lastmod ...........: %d" % self.local.state.lastmod)
-    print ("drop non labels ...:", self.local.state.drop_non_existing_label)
-    print ("replace . with / ..:", self.local.state.replace_slash_with_dot)
+    print ("Timeout ...........: %f" % self.local.state.timeout)
+    print ("Drop non existing labels...:", self.local.state.drop_non_existing_label)
+    print ("Replace . with / ..........:", self.local.state.replace_slash_with_dot)
+    print ("Ignore tags (local) .......:", self.local.state.ignore_tags)
+    print ("Ignore labels (remote) ....:", self.local.state.ignore_remote_labels)
 
 
 

@@ -17,7 +17,7 @@ class Remote:
   # nothing to see here, move along..
   #
   # no seriously: this is not dangerous to keep here, in order to gain
-  # access an users account the access_token and/or refresh_token must be
+  # access to an users account the access_token and/or refresh_token must be
   # compromised. these are stored locally.
   #
   # * https://github.com/gauteh/gmailieer/pull/9
@@ -34,6 +34,7 @@ class Remote:
         "redirect_uris":["urn:ietf:wg:oauth:2.0:oob", "http://localhost"]
     }
 
+  # Not used, here for documentation purposes
   special_labels = [  'INBOX',
                       'SPAM',
                       'TRASH',
@@ -54,12 +55,15 @@ class Remote:
   read_only_labels = set(['SENT', 'DRAFT'])
   read_only_tags   = set(['sent', 'draft'])
 
-  ignore_labels = set([ 'CATEGORY_PERSONAL',
-                        'CATEGORY_SOCIAL',
-                        'CATEGORY_PROMOTIONS',
-                        'CATEGORY_UPDATES',
-                        'CATEGORY_FORUMS',
-                      ])
+  DEFAULT_IGNORE_LABELS = [ 'CATEGORY_PERSONAL',
+                            'CATEGORY_SOCIAL',
+                            'CATEGORY_PROMOTIONS',
+                            'CATEGORY_UPDATES',
+                            'CATEGORY_FORUMS',
+                          ]
+
+  ignore_labels = set()
+
   # query to use
   query = '-in:chats'
 
@@ -102,6 +106,8 @@ class Remote:
     self.CLIENT_SECRET_FILE = g.credentials_file
     self.account = g.local.state.account
     self.dry_run = g.dry_run
+
+    self.ignore_labels = self.gmailieer.local.state.ignore_remote_labels
 
   def __require_auth__ (func):
     def func_wrap (self, *args, **kwargs):
@@ -231,6 +237,7 @@ class Remote:
     """
 
     max_req = self.BATCH_REQUEST_SIZE
+    req_ok  = 0
     N       = len (gids)
     i       = 0
     j       = 0
@@ -290,11 +297,19 @@ class Remote:
       try:
         batch.execute (http = self.http)
 
-        # gradually reduce if we had 10 ok batches
+        # gradually reduce user delay if we had 10 ok batches
         user_rate_ok += 1
-        if user_rate_ok > 10:
+        if user_rate_delay > 0 and user_rate_ok > 10:
           user_rate_delay = user_rate_delay // 2
+          print ("remote: decreasing delay to %s" % user_rate_delay)
           user_rate_ok    = 0
+
+        # gradually increase batch request size if we had 10 ok requests
+        req_ok += 1
+        if max_req < self.BATCH_REQUEST_SIZE and req_ok > 10:
+          max_req = min (max_req * 2, self.BATCH_REQUEST_SIZE)
+          print ("remote: increasing batch request size to: %d" % max_req)
+          req_ok  = 0
 
         conn_errors = 0
 
@@ -306,11 +321,14 @@ class Remote:
         i = j # reset
 
       except Remote.BatchException as ex:
-        if max_req > self.MIN_BATCH_REQUEST_SIZE:
-          max_req = max_req / 2
+        max_req = max_req // 2
+        req_ok  = 0
+
+        if max_req >= self.MIN_BATCH_REQUEST_SIZE:
           i = j # reset
-          print ("reducing batch request size to: %d" % max_req)
+          print ("remote: reducing batch request size to: %d" % max_req)
         else:
+          max_req = self.MIN_BATCH_REQUEST_SIZE
           raise Remote.BatchException ("cannot reduce request any further")
 
       except ConnectionError as ex:
@@ -320,7 +338,7 @@ class Remote:
 
         time.sleep (1)
 
-        if conn_errors > MAX_CONNECTION_ERRORS:
+        if conn_errors > self.MAX_CONNECTION_ERRORS:
           print ("too many connection errors")
           raise
 
