@@ -1,3 +1,13 @@
+gmailieer (0.10-1) unstable; urgency=medium
+
+  * New upstream version; highlights:
+    - only allow one instance of gmi for each directory using fcntl.lockf()
+    - allows syncing categories (personal, social, etc)
+    - various improvements in batch sizing
+    - do not use progressbar if not tty
+
+ -- Julian Andres Klode <jak@debian.org>  Mon, 22 Oct 2018 13:26:44 +0200
+
 gmailieer (0.6-1.1) unstable; urgency=medium
 
   * Add build dependency on dh-python (Closes: #896727)
