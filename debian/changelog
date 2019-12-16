@@ -1,3 +1,17 @@
+gmailieer (1.0-1) UNRELEASED; urgency=medium
+
+  * New upstream version
+    - re-branded from “gmailieer” to “lieer”
+    - new option: --file-extension
+    - set Maildir message mtime to Gmail internalDate (for sorted ls!)
+    - many minor bug fixes
+  * Bump to policy 4.4.1, no changes required
+  * Bump to debhelper 12
+  * Secure debian/copyright format URL
+  * Set upstream metadata fields: Repository, Repository-Browse.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 16 Dec 2019 15:17:37 +0000
+
 gmailieer (0.10-1) unstable; urgency=medium
 
   * New upstream version; highlights:
