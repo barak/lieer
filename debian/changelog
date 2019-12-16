@@ -9,8 +9,11 @@ gmailieer (1.0-1) UNRELEASED; urgency=medium
   * Bump to debhelper 12
   * Secure debian/copyright format URL
   * Set upstream metadata fields: Repository, Repository-Browse.
+  * Update git-buildpackage configuration
+  * Add requires-root field to debian/rules
+  * Update debian/watch to version=4
 
- -- Barak A. Pearlmutter <bap@debian.org>  Mon, 16 Dec 2019 15:17:37 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 16 Dec 2019 16:12:57 +0000
 
 gmailieer (0.10-1) unstable; urgency=medium
 
