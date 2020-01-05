@@ -95,7 +95,7 @@ class Gmailieer:
     # auth
     parser_auth = subparsers.add_parser ('auth', parents = [common],
         description = 'authorize',
-        help = 'authorize gmailieer with your GMail account')
+        help = 'authorize lieer with your GMail account')
 
     parser_auth.add_argument ('-f', '--force', action = 'store_true',
         default = False, help = 'Re-authorize')
@@ -133,15 +133,23 @@ class Gmailieer:
     parser_set.add_argument ('--no-replace-slash-with-dot', action = 'store_true', default = False)
 
     parser_set.add_argument ('--drop-non-existing-labels', action = 'store_true', default = False,
-        help = 'Allow missing labels on the GMail side to be dropped (see https://github.com/gauteh/gmailieer/issues/48)')
+        help = 'Allow missing labels on the GMail side to be dropped (see https://github.com/gauteh/lieer/issues/48)')
 
     parser_set.add_argument ('--no-drop-non-existing-labels', action = 'store_true', default = False)
+
+    parser_set.add_argument ('--ignore-empty-history', action = 'store_true', default = False,
+        help = 'Sometimes GMail indicates more changes, but an empty set is returned (see https://github.com/gauteh/lieer/issues/120)')
+
+    parser_set.add_argument ('--no-ignore-empty-history', action = 'store_true', default = False)
 
     parser_set.add_argument ('--ignore-tags-local', type = str,
         default = None, help = 'Set custom tags to ignore when syncing from local to remote (comma-separated, after translations). Important: see the manual.')
 
     parser_set.add_argument ('--ignore-tags-remote', type = str,
         default = None, help = 'Set custom tags to ignore when syncing from remote to local (comma-separated, before translations). Important: see the manual.')
+
+    parser_set.add_argument ('--file-extension', type = str, default = None,
+        help = 'Add a file extension before the maildir status flags (e.g.: "mbox"). Important: see the manual about changing this setting after initial sync.')
 
     parser_set.set_defaults (func = self.set)
 
@@ -640,35 +648,46 @@ class Gmailieer:
     self.setup (args, False, True)
 
     if args.timeout is not None:
-      self.local.state.set_timeout (args.timeout)
+      self.local.config.set_timeout (args.timeout)
 
     if args.replace_slash_with_dot:
-      self.local.state.set_replace_slash_with_dot (args.replace_slash_with_dot)
+      self.local.config.set_replace_slash_with_dot (args.replace_slash_with_dot)
 
     if args.no_replace_slash_with_dot:
-      self.local.state.set_replace_slash_with_dot (not args.no_replace_slash_with_dot)
+      self.local.config.set_replace_slash_with_dot (not args.no_replace_slash_with_dot)
 
     if args.drop_non_existing_labels:
-      self.local.state.set_drop_non_existing_label (args.drop_non_existing_labels)
+      self.local.config.set_drop_non_existing_label (args.drop_non_existing_labels)
 
     if args.no_drop_non_existing_labels:
-      self.local.state.set_drop_non_existing_label (not args.no_drop_non_existing_labels)
+      self.local.config.set_drop_non_existing_label (not args.no_drop_non_existing_labels)
+
+    if args.ignore_empty_history:
+      self.local.config.set_ignore_empty_history (True)
+
+    if args.no_ignore_empty_history:
+      self.local.config.set_ignore_empty_history (False)
 
     if args.ignore_tags_local is not None:
-      self.local.state.set_ignore_tags (args.ignore_tags_local)
+      self.local.config.set_ignore_tags (args.ignore_tags_local)
 
     if args.ignore_tags_remote is not None:
-      self.local.state.set_ignore_remote_labels (args.ignore_tags_remote)
+      self.local.config.set_ignore_remote_labels (args.ignore_tags_remote)
+
+    if args.file_extension is not None:
+      self.local.config.set_file_extension (args.file_extension)
 
     print ("Repository information and settings:")
-    print ("Account ...........: %s" % self.local.state.account)
+    print ("Account ...........: %s" % self.local.config.account)
     print ("historyId .........: %d" % self.local.state.last_historyId)
     print ("lastmod ...........: %d" % self.local.state.lastmod)
-    print ("Timeout ...........: %f" % self.local.state.timeout)
-    print ("Drop non existing labels...:", self.local.state.drop_non_existing_label)
-    print ("Replace . with / ..........:", self.local.state.replace_slash_with_dot)
-    print ("Ignore tags (local) .......:", self.local.state.ignore_tags)
-    print ("Ignore labels (remote) ....:", self.local.state.ignore_remote_labels)
+    print ("Timeout ...........: %f" % self.local.config.timeout)
+    print ("File extension ....: %s" % self.local.config.file_extension)
+    print ("Drop non existing labels...:", self.local.config.drop_non_existing_label)
+    print ("Ignore empty history ......:", self.local.config.ignore_empty_history)
+    print ("Replace . with / ..........:", self.local.config.replace_slash_with_dot)
+    print ("Ignore tags (local) .......:", self.local.config.ignore_tags)
+    print ("Ignore labels (remote) ....:", self.local.config.ignore_remote_labels)
 
 
 

@@ -35,6 +35,7 @@ class Local:
   labels_translate = { v: k for k, v in translate_labels.items () }
 
   ignore_labels = set ([
+                        'archive',
                         'attachment',
                         'encrypted',
                         'signed',
@@ -50,67 +51,53 @@ class Local:
   class RepositoryException (Exception):
     pass
 
-  class State:
-    # last historyid of last synchronized message, anything that has happened
-    # remotely after this needs to be synchronized. gmail may return a 404 error
-    # if the history records have been deleted, in which case we have to do a full
-    # sync.
-    last_historyId = 0
 
-    # this is the last modification id of the notmuch db when the previous push was completed.
-    lastmod = 0
-
+  class Config:
     replace_slash_with_dot = False
     account = None
     timeout = 0
     drop_non_existing_label = False
+    ignore_empty_history = False
     ignore_tags = None
     ignore_remote_labels = None
+    file_extension = None
 
-    def __init__ (self, state_f):
-      self.state_f = state_f
+    def __init__ (self, config_f):
+      self.config_f = config_f
 
-      if os.path.exists (self.state_f):
-        with open (self.state_f, 'r') as fd:
+      if os.path.exists (self.config_f):
+        with open (self.config_f, 'r') as fd:
           self.json = json.load (fd)
       else:
         self.json = {}
 
-      self.last_historyId = self.json.get ('last_historyId', 0)
-      self.lastmod = self.json.get ('lastmod', 0)
       self.replace_slash_with_dot = self.json.get ('replace_slash_with_dot', False)
       self.account = self.json.get ('account', 'me')
       self.timeout = self.json.get ('timeout', 0)
       self.drop_non_existing_label = self.json.get ('drop_non_existing_label', False)
+      self.ignore_empty_history = self.json.get ('ignore_empty_history', False)
       self.ignore_tags = set(self.json.get ('ignore_tags', []))
       self.ignore_remote_labels = set(self.json.get ('ignore_remote_labels', Remote.DEFAULT_IGNORE_LABELS))
+      self.file_extension = self.json.get ('file_extension', '')
 
     def write (self):
       self.json = {}
 
-      self.json['last_historyId'] = self.last_historyId
-      self.json['lastmod'] = self.lastmod
       self.json['replace_slash_with_dot'] = self.replace_slash_with_dot
       self.json['account'] = self.account
       self.json['timeout'] = self.timeout
       self.json['drop_non_existing_label'] = self.drop_non_existing_label
+      self.json['ignore_empty_history'] = self.ignore_empty_history
       self.json['ignore_tags'] = list(self.ignore_tags)
       self.json['ignore_remote_labels'] = list(self.ignore_remote_labels)
+      self.json['file_extension'] = self.file_extension
 
-      if os.path.exists (self.state_f):
-        shutil.copyfile (self.state_f, self.state_f + '.bak')
+      if os.path.exists (self.config_f):
+        shutil.copyfile (self.config_f, self.config_f + '.bak')
 
-      with tempfile.NamedTemporaryFile (mode = 'w+', dir = os.path.dirname (self.state_f), delete = False) as fd:
+      with tempfile.NamedTemporaryFile (mode = 'w+', dir = os.path.dirname (self.config_f), delete = False) as fd:
         json.dump (self.json, fd)
-        os.rename (fd.name, self.state_f)
-
-    def set_last_history_id (self, hid):
-      self.last_historyId = hid
-      self.write ()
-
-    def set_lastmod (self, m):
-      self.lastmod = m
-      self.write ()
+        os.rename (fd.name, self.config_f)
 
     def set_account (self, a):
       self.account = a
@@ -128,6 +115,10 @@ class Local:
       self.drop_non_existing_label = r
       self.write ()
 
+    def set_ignore_empty_history (self, r):
+      self.ignore_empty_history = r
+      self.write()
+
     def set_ignore_tags (self, t):
       if len(t.strip ()) == 0:
         self.ignore_tags = set()
@@ -144,13 +135,83 @@ class Local:
 
       self.write ()
 
+    def set_file_extension (self, t):
+      try:
+        with tempfile.NamedTemporaryFile (dir = os.path.dirname (self.state_f), suffix = t) as fd:
+          pass
+
+        self.file_extension = t.strip ()
+        self.write ()
+      except OSError:
+        print ("Failed creating test file with file extension: " + t + ", not set.")
+        raise
+
+
+  class State:
+    # last historyid of last synchronized message, anything that has happened
+    # remotely after this needs to be synchronized. gmail may return a 404 error
+    # if the history records have been deleted, in which case we have to do a full
+    # sync.
+    last_historyId = 0
+
+    # this is the last modification id of the notmuch db when the previous push was completed.
+    lastmod = 0
+
+    def __init__ (self, state_f, config):
+      self.state_f = state_f
+
+      # True if config file contains state keys and should be migrated.
+      # We will write both state and config after load if true.
+      migrate_from_config = False
+
+      if os.path.exists (self.state_f):
+        with open (self.state_f, 'r') as fd:
+          self.json = json.load (fd)
+      elif os.path.exists (config.config_f):
+        with open (config.config_f, 'r') as fd:
+          self.json = json.load (fd)
+        if any(k in self.json.keys () for k in ['last_historyId', 'lastmod']):
+          migrate_from_config = True
+      else:
+        self.json = {}
+
+      self.last_historyId = self.json.get ('last_historyId', 0)
+      self.lastmod = self.json.get ('lastmod', 0)
+
+      if migrate_from_config:
+        self.write ()
+        config.write ()
+
+    def write (self):
+      self.json = {}
+
+      self.json['last_historyId'] = self.last_historyId
+      self.json['lastmod'] = self.lastmod
+
+      if os.path.exists (self.state_f):
+        shutil.copyfile (self.state_f, self.state_f + '.bak')
+
+      with tempfile.NamedTemporaryFile (mode = 'w+', dir = os.path.dirname (self.state_f), delete = False) as fd:
+        json.dump (self.json, fd)
+        os.rename (fd.name, self.state_f)
+
+    def set_last_history_id (self, hid):
+      self.last_historyId = hid
+      self.write ()
+
+    def set_lastmod (self, m):
+      self.lastmod = m
+      self.write ()
+
+
   def __init__ (self, g):
     self.gmailieer = g
     self.wd = os.getcwd ()
     self.dry_run = g.dry_run
 
-    # state file for local repository
-    self.state_f = os.path.join (self.wd, '.gmailieer.json')
+    # config and state files for local repository
+    self.config_f = os.path.join (self.wd, '.gmailieer.json')
+    self.state_f = os.path.join (self.wd, '.state.gmailieer.json')
     self.credentials_f = os.path.join (self.wd, '.credentials.gmailieer.json')
 
     # mail store
@@ -161,15 +222,16 @@ class Local:
     Loads the current local repository
     """
 
-    if not os.path.exists (self.state_f):
-      raise Local.RepositoryException ('local repository not initialized: could not find state file')
+    if not os.path.exists (self.config_f):
+      raise Local.RepositoryException ('local repository not initialized: could not find config file')
 
     if not os.path.exists (self.md):
       raise Local.RepositoryException ('local repository not initialized: could not find mail dir')
 
-    self.state = Local.State (self.state_f)
+    self.config = Local.Config (self.config_f)
+    self.state = Local.State (self.state_f, self.config)
 
-    self.ignore_labels = self.ignore_labels | self.state.ignore_tags
+    self.ignore_labels = self.ignore_labels | self.config.ignore_tags
 
     ## Check if we are in the notmuch db
     with notmuch.Database () as db:
@@ -228,7 +290,7 @@ class Local:
 
     self.gids = {}
     for f in self.files:
-      m = os.path.basename(f).split (':')[0]
+      m = self.__filename_to_gid__ (os.path.basename (f))
       self.gids[m] = f
 
   def initialize_repository (self, replace_slash_with_dot, account):
@@ -238,16 +300,16 @@ class Local:
     print ("initializing repository in: %s.." % self.wd)
 
     # check if there is a repository here already or if there is anything that will conflict with setting up one
-    if os.path.exists (self.state_f):
+    if os.path.exists (self.config_f):
       raise Local.RepositoryException ("'.gmailieer.json' exists: this repository seems to already be set up!")
 
     if os.path.exists (self.md):
       raise Local.RepositoryException ("'mail' exists: this repository seems to already be set up!")
 
-    self.state = Local.State (self.state_f)
-    self.state.replace_slash_with_dot = replace_slash_with_dot
-    self.state.account = account
-    self.state.write ()
+    self.config = Local.Config (self.config_f)
+    self.config.replace_slash_with_dot = replace_slash_with_dot
+    self.config.account = account
+    self.config.write ()
     os.makedirs (os.path.join (self.md, 'cur'))
     os.makedirs (os.path.join (self.md, 'new'))
     os.makedirs (os.path.join (self.md, 'tmp'))
@@ -284,7 +346,7 @@ class Local:
         # there might be more GIDs (and files) for each NotmuchMessage, if so,
         # the last matching file will be used in the gids map.
 
-        _m = new_f.name.split (':')[0]
+        _m = self.__filename_to_gid__ (new_f.name)
         self.gids[_m] = os.path.join (new_f.parent.name, new_f.name)
         self.files.append (os.path.join (new_f.parent.name, new_f.name))
 
@@ -303,16 +365,33 @@ class Local:
           print ("'%s' is not in this repository, ignoring." % fname)
         else:
           # get gmail id
-          gid = os.path.basename (fname).split (':')[0]
-          gids.append (gid)
-          messages.append (m)
+          gid = self.__filename_to_gid__ (os.path.basename (fname))
+          if gid:
+            gids.append (gid)
+            messages.append (m)
 
     return (messages, gids)
 
+  def __filename_to_gid__ (self, fname):
+    ext = ''
+    if self.config.file_extension:
+        ext = '.' + self.config.file_extension
+    ext += ':2,'
+
+    f = fname.rfind (ext)
+    if f > 5:
+      return fname[:f]
+    else:
+      print ("'%s' does not contain valid maildir delimiter, correct file name extension, or does not seem to have a valid GID, ignoring.")
+      return None
 
   def __make_maildir_name__ (self, m, labels):
     # http://cr.yp.to/proto/maildir.html
-    p = m + ':'
+    ext = ''
+    if self.config.file_extension:
+        ext = '.' + self.config.file_extension
+
+    p = m + ext + ':'
     info = '2,'
 
     # must be ascii sorted
@@ -390,6 +469,10 @@ class Local:
       with open (tmp_p, 'wb') as fd:
         fd.write (msg_str)
 
+      # Set atime and mtime of the message file to Gmail receive date
+      internalDate = int(m['internalDate']) / 1000  # ms to s
+      os.utime(tmp_p, (internalDate, internalDate))
+
       os.rename (tmp_p, p)
 
     # add to notmuch
@@ -405,8 +488,8 @@ class Local:
     for l in glabels:
       ll = self.gmailieer.remote.labels.get(l, None)
 
-      if ll is None and not self.state.drop_non_existing_label:
-        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/gmailieer/issues/48)"
+      if ll is None and not self.config.drop_non_existing_label:
+        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/lieer/issues/48)"
         print (err)
         raise Local.RepositoryException (err)
       elif ll is None:
@@ -422,7 +505,7 @@ class Local:
     labels = [self.translate_labels.get (l, l) for l in labels]
 
     # this is my weirdness
-    if self.state.replace_slash_with_dot:
+    if self.config.replace_slash_with_dot:
       labels = [l.replace ('/', '.') for l in labels]
 
     if fname is None:
