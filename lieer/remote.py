@@ -10,7 +10,7 @@ from pathlib import Path
 
 class Remote:
   SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.labels https://www.googleapis.com/auth/gmail.modify'
-  APPLICATION_NAME   = 'Gmailieer'
+  APPLICATION_NAME   = 'Lieer'
   CLIENT_SECRET_FILE = None
   authorized         = False
 
@@ -20,12 +20,12 @@ class Remote:
   # access to an users account the access_token and/or refresh_token must be
   # compromised. these are stored locally.
   #
-  # * https://github.com/gauteh/gmailieer/pull/9
+  # * https://github.com/gauteh/lieer/pull/9
   # * https://stackoverflow.com/questions/25957027/oauth-2-installed-application-client-secret-considerationsgoogle-api/43061998#43061998
   # * https://stackoverflow.com/questions/19615372/client-secret-in-oauth-2-0?rq=1
   #
   OAUTH2_CLIENT_SECRET = {
-       "client_id":"753933720722-ju82fu305lii0v9rdo6mf9hj40l5juv0.apps.googleusercontent.com",
+        "client_id":"753933720722-ju82fu305lii0v9rdo6mf9hj40l5juv0.apps.googleusercontent.com",
         "project_id":"capable-pixel-160614",
         "auth_uri":"https://accounts.google.com/o/oauth2/auth",
         "token_uri":"https://accounts.google.com/o/oauth2/token",
@@ -104,10 +104,10 @@ class Remote:
     assert g.local.loaded, "local repository must be loaded!"
 
     self.CLIENT_SECRET_FILE = g.credentials_file
-    self.account = g.local.state.account
+    self.account = g.local.config.account
     self.dry_run = g.dry_run
 
-    self.ignore_labels = self.gmailieer.local.state.ignore_remote_labels
+    self.ignore_labels = self.gmailieer.local.config.ignore_remote_labels
 
   def __require_auth__ (func):
     def func_wrap (self, *args, **kwargs):
@@ -199,8 +199,12 @@ class Remote:
         yield results['history']
       else:
         print ("remote: no 'history' when more pages were indicated.")
-        self.__request_done__ (False)
-        raise Remote.NoHistoryException ()
+        if not self.gmailieer.local.config.ignore_empty_history:
+          self.__request_done__ (False)
+          print ("You can ignore this error with: gmi set --ignore-empty-history (https://github.com/gauteh/lieer/issues/120)")
+          raise Remote.NoHistoryException ()
+        else:
+          self.__request_done__ (True)
 
   @__require_auth__
   def all_messages (self, limit = None):
@@ -263,7 +267,7 @@ class Remote:
 
         elif type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 400:
           # message id invalid, probably caused by stray files in the mail repo
-          print ("remote: message id: %s is invalid! are there any non-gmailieer files created in the gmailieer repository?" % gids[j])
+          print ("remote: message id: %s is invalid! are there any non-lieer files created in the lieer repository?" % gids[j])
           j += 1
           return
 
@@ -378,7 +382,7 @@ class Remote:
 
     self.credentials = self.__get_credentials__ ()
 
-    timeout = self.gmailieer.local.state.timeout
+    timeout = self.gmailieer.local.config.timeout
     if timeout == 0: timeout = None
 
     self.http = self.credentials.authorize (httplib2.Http(timeout = timeout))
@@ -469,8 +473,8 @@ class Remote:
     for l in glabels:
       ll = self.labels.get(l, None)
 
-      if ll is None and not self.gmailieer.local.state.drop_non_existing_label:
-        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/gmailieer/issues/48)"
+      if ll is None and not self.gmailieer.local.config.drop_non_existing_label:
+        err = "error: GMail supplied a label that there exists no record for! You can `gmi set --drop-non-existing-labels` to work around the issue (https://github.com/gauteh/lieer/issues/48)"
         print (err)
         raise Remote.GenericException (err)
       elif ll is None:
@@ -486,7 +490,7 @@ class Remote:
     labels = [self.gmailieer.local.translate_labels.get (l, l) for l in labels]
 
     # this is my weirdness
-    if self.gmailieer.local.state.replace_slash_with_dot:
+    if self.gmailieer.local.config.replace_slash_with_dot:
       labels = [l.replace ('/', '.') for l in labels]
 
     labels = set(labels)
@@ -504,7 +508,7 @@ class Remote:
     add = [self.gmailieer.local.labels_translate.get (k, k) for k in add]
     rem = [self.gmailieer.local.labels_translate.get (k, k) for k in rem]
 
-    if self.gmailieer.local.state.replace_slash_with_dot:
+    if self.gmailieer.local.config.replace_slash_with_dot:
       add = [a.replace ('.', '/') for a in add]
       rem = [r.replace ('.', '/') for r in rem]
 
@@ -591,7 +595,7 @@ class Remote:
 
         elif type(excep) is googleapiclient.errors.HttpError and excep.resp.status == 400:
           # message id invalid, probably caused by stray files in the mail repo
-          print ("remote: message id: %s is invalid! are there any non-gmailieer files created in the gmailieer repository?" % gids[j])
+          print ("remote: message id: %s is invalid! are there any non-lieer files created in the lieer repository?" % gids[j])
           j += 1
           return
 
