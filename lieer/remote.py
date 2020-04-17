@@ -340,11 +340,11 @@ class Remote:
         i = j # reset
         conn_errors += 1
 
-        time.sleep (1)
-
         if conn_errors > self.MAX_CONNECTION_ERRORS:
           print ("too many connection errors")
           raise
+
+        time.sleep (1)
 
       finally:
         # handle batch
@@ -686,4 +686,26 @@ class Remote:
     else:
       return (None, None)
 
+
+  @__require_auth__
+  def send (self, message, threadId = None):
+    """
+    Send message
+
+    message: MIME message as bytes
+
+    Returns:
+
+      Message
+    """
+    import base64
+
+    message = { 'raw': base64.urlsafe_b64encode(message).decode() }
+
+    if threadId is not None:
+      message['threadId'] = threadId
+
+    msg = self.service.users().messages().send(userId = self.account, body = message).execute()
+
+    return msg
 
