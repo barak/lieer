@@ -1,7 +1,7 @@
 gmailieer (1.2-1) UNRELEASED; urgency=medium
 
-  * New upstream version
-    - re-branded from “gmailieer” to “lieer”
+  * New upstream version (closes: #962733)
+    - re-branded from “gmailieer” to “lieer” (closes: #947079)
     - new option: --file-extension
     - set Maildir message mtime to Gmail internalDate (for sorted ls!)
     - many minor bug fixes
