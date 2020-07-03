@@ -109,16 +109,45 @@ See below for more [caveats](#caveats).
 Lieer may be used as a simple stand-in for the `sendmail` MTA. A typical configuration for a MUA send command might be:
 
 ```sh
-gmi send -C ~/.mail/account.gmail
+gmi send -t -C ~/.mail/account.gmail
 ```
 
-the raw message is either read from `stdin` or a filename may be supplied.
+Like the real sendmail program, the raw message is read from `stdin`.
+
+Most sendmail implementations allow passing additional recipients in additional
+arguments. However, the GMail API only supports the `-t` (`--read-recipients`) mode of
+sendmail, without additional recipients.
+
+We try to support valid combinations from MUAs that make use of recipients
+passed as arguments. Additional recipients are ignored, but validated. The
+following combinations are OK:
+
+ - When `-t` is passed, we need to check for the CLI-passed recipients to be
+   equal or a subset of the ones passed in the headers.
+
+ - When `-t` is not passed, all header-passed recipients need to be provided in
+   the CLI as well.
+
+This avoids silently not sending mail to some recipients (pretending we did),
+or sending mail to recipients we didn't want to send to again.
+
 Lieer will try to associate the sent message with the existing thread if it has
-an `In-Reply-To` header.
+an `In-Reply-To` header. According to the [Gmail
+API](https://developers.google.com/gmail/api/v1/reference/users/messages/send#request-body)
+the `Subject:` header must also match, but this does not seem to be necessary
+(at least not where just `Re:` has been prepended).
 
 > If the email address in the `From:` header does not match exactly the one of
 > your account, it seems like GMail resets the from to your account _address_
 > only.
+
+Note that the following flags are ignored for `sendmail` compatability:
+
+  - `-f` (ignored, set envelope `From:` yourself)
+  - `-o` (ignored)
+  - `-i` (always implied, not bothered by single `.`'s)
+
+There are instructions for using this in your email client (for example Emacs) in the [wiki](https://github.com/gauteh/lieer/wiki/GNU-Emacs-and-Lieer).
 
 # Settings
 

@@ -1,3 +1,20 @@
+# Copyright © 2020  Gaute Hope <eg@gaute.vetsj.com>
+#
+# This file is part of Lieer.
+#
+# Lieer is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
 import os, shutil, fcntl
 import json
 import base64
@@ -55,11 +72,12 @@ class Local:
   class Config:
     replace_slash_with_dot = False
     account = None
-    timeout = 0
+    timeout = 10 * 60
     drop_non_existing_label = False
     ignore_empty_history = False
     ignore_tags = None
     ignore_remote_labels = None
+    remove_local_messages = True
     file_extension = None
 
     def __init__ (self, config_f):
@@ -77,9 +95,10 @@ class Local:
 
       self.replace_slash_with_dot = self.json.get ('replace_slash_with_dot', False)
       self.account = self.json.get ('account', 'me')
-      self.timeout = self.json.get ('timeout', 0)
+      self.timeout = self.json.get ('timeout', 10 * 60)
       self.drop_non_existing_label = self.json.get ('drop_non_existing_label', False)
       self.ignore_empty_history = self.json.get ('ignore_empty_history', False)
+      self.remove_local_messages = self.json.get ('remove_local_messages', True)
       self.ignore_tags = set(self.json.get ('ignore_tags', []))
       self.ignore_remote_labels = set(self.json.get ('ignore_remote_labels', Remote.DEFAULT_IGNORE_LABELS))
       self.file_extension = self.json.get ('file_extension', '')
@@ -94,6 +113,7 @@ class Local:
       self.json['ignore_empty_history'] = self.ignore_empty_history
       self.json['ignore_tags'] = list(self.ignore_tags)
       self.json['ignore_remote_labels'] = list(self.ignore_remote_labels)
+      self.json['remove_local_messages'] = self.remove_local_messages
       self.json['file_extension'] = self.file_extension
 
       if os.path.exists (self.config_f):
@@ -121,6 +141,10 @@ class Local:
 
     def set_ignore_empty_history (self, r):
       self.ignore_empty_history = r
+      self.write()
+
+    def set_remove_local_messages (self, r):
+      self.remove_local_messages = r
       self.write()
 
     def set_ignore_tags (self, t):
@@ -401,7 +425,7 @@ class Local:
     if f > 5:
       return fname[:f]
     else:
-      print ("'%s' does not contain valid maildir delimiter, correct file name extension, or does not seem to have a valid GID, ignoring.")
+      print ("'%s' does not contain valid maildir delimiter, correct file name extension, or does not seem to have a valid GID, ignoring." % fname)
       return None
 
   def __make_maildir_name__ (self, m, labels):
@@ -435,6 +459,8 @@ class Local:
     """
     Remove message from local store
     """
+    assert self.config.remove_local_messages, "tried to remove message when 'remove_local_messages' was set to False"
+
     fname  = self.gids.get (gid, None)
     ffname = fname
 
