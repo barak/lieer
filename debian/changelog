@@ -13,6 +13,7 @@ gmailieer (1.1-1) UNRELEASED; urgency=medium
   * Add requires-root field to debian/rules
   * Update debian/watch to version=4
   * Bump debhelper from old 12 to 13.
+  * Set upstream metadata fields: Bug-Database, Bug-Submit.
 
  -- Barak A. Pearlmutter <bap@debian.org>  Fri, 17 Apr 2020 15:47:56 +0100
 
