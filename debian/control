@@ -31,3 +31,10 @@ Description: Fast fetch and two-way tag synchronization between notmuch and GMai
  It will not and can not:
  * Add or delete messages on your remote account
  * Modify messages other than their labels
+
+Package: gmailieer
+Section: mail
+Architecture: all
+Depends: lieer (>= 1.2)
+Description: Transition package, gmailieer to lieer
+ Ease transition from gmailieer to lieer with this dummy package.
