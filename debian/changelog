@@ -17,8 +17,9 @@ gmailieer (1.2-1) unstable; urgency=medium
   * Don't bother declaring automatically-figured-out runtime dependencies
   * Add dummy transition package gmailieer -> lieer
   * Add author of this stanza as uploader; jigger for co-maintenance
+  * Placate lintian in minor ways
 
- -- Barak A. Pearlmutter <barak@pearlmutter.net>  Fri, 04 Sep 2020 22:29:40 +0100
+ -- Barak A. Pearlmutter <barak@pearlmutter.net>  Fri, 04 Sep 2020 22:47:33 +0100
 
 gmailieer (0.10-1) unstable; urgency=medium
 

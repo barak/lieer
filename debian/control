@@ -35,8 +35,7 @@ Description: Fast fetch and two-way tag synchronization between notmuch and GMai
  * Modify messages other than their labels
 
 Package: gmailieer
-Section: mail
 Architecture: all
-Depends: lieer (>= 1.2)
+Depends: ${misc:Depends}, lieer (>= 1.2)
 Description: Transition package, gmailieer to lieer
  Ease transition from gmailieer to lieer with this dummy package.
