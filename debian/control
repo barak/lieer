@@ -18,8 +18,7 @@ Vcs-Browser: https://salsa.debian.org/debian/lieer
 
 Package: lieer
 Architecture: all
-Depends: python3-notmuch (>= 0.25),
-         ${misc:Depends},
+Depends: ${misc:Depends},
          ${python3:Depends}
 Provides: gmailieer
 Replaces: gmailieer (<< 1.2)
