@@ -13,8 +13,11 @@ gmailieer (1.2-1) UNRELEASED; urgency=medium
   * Update debian/watch to version=4
   * Bump debhelper from old 11 to 13.
   * Set upstream metadata fields: Bug-Database, Bug-Submit.
+  * Track upstream tweaks and bug fixes
+  * Don't bother declaring automatically-figured-out runtime dependencies
+  * Add dummy transition package gmailieer -> lieer
 
- -- Barak A. Pearlmutter <bap@debian.org>  Fri, 03 Jul 2020 16:10:50 +0100
+ -- Barak A. Pearlmutter <barak@pearlmutter.net>  Fri, 04 Sep 2020 21:30:46 +0100
 
 gmailieer (0.10-1) unstable; urgency=medium
 
