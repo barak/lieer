@@ -1,4 +1,4 @@
-gmailieer (1.2-1) UNRELEASED; urgency=medium
+gmailieer (1.2-1) unstable; urgency=medium
 
   * New upstream version (closes: #962733)
     - re-branded from “gmailieer” to “lieer” (closes: #947079)
@@ -16,8 +16,9 @@ gmailieer (1.2-1) UNRELEASED; urgency=medium
   * Track upstream tweaks and bug fixes
   * Don't bother declaring automatically-figured-out runtime dependencies
   * Add dummy transition package gmailieer -> lieer
+  * Add author of this stanza as uploader; jigger for co-maintenance
 
- -- Barak A. Pearlmutter <barak@pearlmutter.net>  Fri, 04 Sep 2020 21:30:46 +0100
+ -- Barak A. Pearlmutter <barak@pearlmutter.net>  Fri, 04 Sep 2020 22:29:40 +0100
 
 gmailieer (0.10-1) unstable; urgency=medium
 
