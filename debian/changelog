@@ -1,3 +1,9 @@
+gmailieer (1.2-2) unstable; urgency=medium
+
+  * New version of emacs changed my email in prev stanza, oops, fixed.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Fri, 11 Sep 2020 11:19:28 +0100
+
 gmailieer (1.2-1) unstable; urgency=medium
 
   * New upstream version (closes: #962733)
