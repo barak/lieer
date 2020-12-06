@@ -24,6 +24,7 @@ Depends: ${misc:Depends},
          ${python3:Depends}
 Provides: gmailieer
 Replaces: gmailieer (<< 1.2)
+Breaks: gmailieer (<< 1.2)
 Description: Fast fetch and two-way tag synchronization between notmuch and GMail
  This program can pull email and labels (and changes to labels) from your
  GMail account and store them locally in a maildir with the labels synchronized
