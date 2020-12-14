@@ -27,8 +27,7 @@ While Lieer has been used to successfully synchronize millions of messages and t
 
 ## Installation
 
-After cloning this repository, symlink `gmi` to somewhere on your path, or use `python setup.py`.
-
+After cloning the repository Lieer can be installed through pip by using the command ```pip install .``
 # Usage
 
 This assumes your root mail folder is in `~/.mail` and that this folder is _already_ set up with notmuch.
@@ -75,7 +74,7 @@ changes of the affected messages.
 $ gmi pull
 ```
 
-the first time you do this, or if a full synchronization is needed it will take longer.
+the first time you do this, or if a full synchronization is needed it will take longer. You can try to use the `--resume` option if you get stuck on getting the metadata and have to abort (this will cause local changes made in the interim to be ignored in the next push).
 
 ## Push
 
