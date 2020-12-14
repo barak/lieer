@@ -1,3 +1,9 @@
+gmailieer (1.3-1) UNRELEASED; urgency=medium
+
+  * New upstream version
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 14 Dec 2020 11:56:13 +0000
+
 gmailieer (1.2-3) unstable; urgency=medium
 
   * bump policy to 4.5.1, no chances required
