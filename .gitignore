@@ -5,3 +5,4 @@ mail
 build
 dist
 *.egg-info
+/.pybuild/
