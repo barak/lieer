@@ -31,7 +31,7 @@ class Local:
 
 
   # NOTE: Update README when changing this map.
-  translate_labels = {
+  translate_labels_default = {
                       'INBOX'     : 'inbox',
                       'SPAM'      : 'spam',
                       'TRASH'     : 'trash',
@@ -49,7 +49,7 @@ class Local:
                       'CATEGORY_FORUMS'       : 'forums',
                       }
 
-  labels_translate = { v: k for k, v in translate_labels.items () }
+  labels_translate_default = { v: k for k, v in translate_labels_default.items () }
 
   ignore_labels = set ([
                         'archive',
@@ -66,16 +66,34 @@ class Local:
                         'voicemail',
                         ])
 
-  @classmethod
-  def update_translation(cls, remote, local):
+  def update_translation(self, remote, local):
     """
     Convenience function to ensure both maps (remote -> local and local -> remote)
     get updated when you update a translation.
     """
     # Did you reverse the parameters?
-    assert remote in cls.translate_labels
-    cls.translate_labels[remote] = local
-    cls.labels_translate = { v: k for k, v in cls.translate_labels.items () }
+    assert remote in self.translate_labels
+    self.translate_labels[remote] = local
+    self.labels_translate = { v: k for k, v in self.translate_labels.items () }
+
+  def update_translation_list_with_overlay(self, translation_list_overlay):
+    """
+    Takes a list with an even number of items. The list is interpreted as a list of pairs
+    of (remote, local), where each member of each pair is a string. Each pair is added to the
+    translation, overwriting the translation if one already exists (in either direction).
+    If either the remote or the local labels are non-unique, the later items in the list will
+    overwrite the earlier ones in the direction in which the source is non-unique (for example,
+    ["a", "1", "b", 2", "a", "3"] will yield {'a': 3, 'b': 2} in one direction and {1: 'a', 2: 'b', 3: 'a'}
+    in the other).
+    """
+
+    if len(translation_list_overlay) % 2 != 0:
+      raise Exception(f'Translation list overlay must have an even number of items: {translation_list_overlay}')
+
+    for i in range(0,len(translation_list_overlay),2):
+      (remote, local) = translation_list_overlay[i], translation_list_overlay[i+1]
+      self.translate_labels[remote] = local
+      self.labels_translate[local] = remote
 
   class RepositoryException (Exception):
     pass
@@ -92,6 +110,7 @@ class Local:
     remove_local_messages = True
     file_extension = None
     local_trash_tag = 'trash'
+    translation_list_overlay = None
 
     def __init__ (self, config_f):
       self.config_f = config_f
@@ -116,6 +135,7 @@ class Local:
       self.ignore_remote_labels = set(self.json.get ('ignore_remote_labels', Remote.DEFAULT_IGNORE_LABELS))
       self.file_extension = self.json.get ('file_extension', '')
       self.local_trash_tag = self.json.get ('local_trash_tag', 'trash')
+      self.translation_list_overlay = self.json.get ('translation_list_overlay', [])
 
     def write (self):
       self.json = {}
@@ -130,6 +150,7 @@ class Local:
       self.json['remove_local_messages'] = self.remove_local_messages
       self.json['file_extension'] = self.file_extension
       self.json['local_trash_tag'] = self.local_trash_tag
+      self.json['translation_list_overlay'] = self.translation_list_overlay
 
       if os.path.exists (self.config_f):
         shutil.copyfile (self.config_f, self.config_f + '.bak')
@@ -180,7 +201,7 @@ class Local:
 
     def set_file_extension (self, t):
       try:
-        with tempfile.NamedTemporaryFile (dir = os.path.dirname (self.state_f), suffix = t) as fd:
+        with tempfile.NamedTemporaryFile (dir = os.path.dirname (self.config_f), suffix = t) as _:
           pass
 
         self.file_extension = t.strip ()
@@ -194,8 +215,17 @@ class Local:
         print('The local_trash_tag must be a single tag, not a list.  Commas are not allowed.')
         raise ValueError()
       self.local_trash_tag = t.strip() or 'trash'
-      Local.update_translation('TRASH', self.local_trash_tag)
       self.write()
+
+    def set_translation_list_overlay (self, t):
+      if len(t.strip ()) == 0:
+        self.translation_list_overlay = []
+      else:
+        self.translation_list_overlay = [ tt.strip () for tt in t.split(',') ]
+      if len(self.translation_list_overlay) % 2 != 0:
+        raise Exception(f'Translation list overlay must have an even number of items: {self.translation_list_overlay}')
+      self.write ()
+
 
 
   class State:
@@ -263,7 +293,7 @@ class Local:
       self.lastmod = m
       self.write ()
 
-
+  # we are in the class "Local"; this is the Local instance constructor
   def __init__ (self, g):
     self.gmailieer = g
     self.wd = os.getcwd ()
@@ -276,6 +306,10 @@ class Local:
 
     # mail store
     self.md = os.path.join (self.wd, 'mail')
+
+    # initialize label translation instance variables
+    self.translate_labels = Local.translate_labels_default.copy()
+    self.labels_translate = Local.labels_translate_default.copy()
 
   def load_repository (self, block = False):
     """
@@ -295,6 +329,8 @@ class Local:
     self.state = Local.State (self.state_f, self.config)
 
     self.ignore_labels = self.ignore_labels | self.config.ignore_tags
+    self.update_translation('TRASH', self.config.local_trash_tag)
+    self.update_translation_list_with_overlay(self.config.translation_list_overlay)
 
     ## Check if we are in the notmuch db
     with notmuch.Database () as db:
@@ -341,12 +377,12 @@ class Local:
     ## this cache is used to know which messages we have a physical copy of.
     ## hopefully this won't grow too gigantic with lots of messages.
     self.files = []
-    for (dp, dirnames, fnames) in os.walk (os.path.join (self.md, 'cur')):
+    for (_, _, fnames) in os.walk (os.path.join (self.md, 'cur')):
       _fnames = ( 'cur/' + f for f in fnames )
       self.files.extend (_fnames)
       break
 
-    for (dp, dirnames, fnames) in os.walk (os.path.join (self.md, 'new')):
+    for (_, _, fnames) in os.walk (os.path.join (self.md, 'new')):
       _fnames = ( 'new/' + f for f in fnames )
       self.files.extend (_fnames)
       break
@@ -604,9 +640,9 @@ class Local:
       else:
         try:
           if hasattr (notmuch.Database, 'index_file'):
-            (nmsg, stat) = db.index_file (fname, True)
+            (nmsg, _) = db.index_file (fname, True)
           else:
-            (nmsg, stat) = db.add_message (fname, True)
+            (nmsg, _) = db.add_message (fname, True)
         except notmuch.errors.FileNotEmailError:
           print('%s is not an email' % fname)
           return True
