@@ -5,6 +5,7 @@ Maintainer: lieer maintainers <gmailieer@packages.debian.org>
 Uploaders: Julian Andres Klode <jak@debian.org>,
 	   Barak A. Pearlmutter <bap@debian.org>
 Build-Depends: debhelper-compat (= 13),
+	       help2man,
                dh-python,
                python3,
 	       python3-pytest,

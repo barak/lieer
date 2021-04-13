@@ -4,3 +4,16 @@ export PYBUILD_INSTALL_ARGS=--install-lib=/usr/share/lieer/ --install-scripts=/u
 
 %:
 	dh $@ --without python2 --with python3 --buildsystem=pybuild
+
+execute_after_dh_auto_build: debian/gmi.1
+
+debian/gmi.1: ./gmi debian/gmi-man-include debian/control
+	help2man --no-info --version-string=1.3-2 \
+	 --name="$(shell egrep '^Description: ' debian/control | head -1 | sed 's/Description: //')" \
+	 --include=debian/gmi-man-include \
+	 --output=$@ $<
+
+debian/gmi-man-include: debian/control
+	echo '[SYNOPSIS]' > $@
+	awk 'BEGIN {d=0; l=0} /^Description:/ {d=1} /^$$/&&(l==1) {exit} (l==1) {print} (d==1) {l=1}' $< \
+	 | sed 's/^ //' | sed 's/^[.]$$//' >> $@

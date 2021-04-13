@@ -3,8 +3,9 @@ gmailieer (1.3-2) UNRELEASED; urgency=medium
   * Track upstream changes
   * Recommend notmuch
   * Build dependency on pytest
+  * Use help2man to generate gmi(1) man page
 
- -- Barak A. Pearlmutter <bap@debian.org>  Tue, 13 Apr 2021 10:32:13 +0100
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 13 Apr 2021 10:43:44 +0100
 
 gmailieer (1.3-1) unstable; urgency=medium
 
