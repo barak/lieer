@@ -11,7 +11,7 @@ debian/gmi.1: ./gmi debian/gmi-man-include debian/control
 	help2man --no-info --version-string=1.3-2 \
 	 --name="$(shell egrep '^Description: ' debian/control | head -1 | sed 's/Description: //')" \
 	 --include=debian/gmi-man-include \
-	 --output=$@ $<
+	 --output=$@ ./gmi
 
 debian/gmi-man-include: debian/control
 	echo '[SYNOPSIS]' > $@
