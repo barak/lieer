@@ -10,11 +10,11 @@ Build-Depends: debhelper-compat (= 13),
 	       python3-all:any,
 	       python3-pytest,
 	       python3-googleapi,
-	       python3-notmuch (>= 0.25),
+	       python3-notmuch2 (>= 0.36),
 	       python3-oauth2client,
 	       python3-setuptools,
 	       python3-tqdm
-Standards-Version: 4.6.0
+Standards-Version: 4.6.1
 Rules-Requires-Root: no
 Homepage: https://github.com/gauteh/lieer
 Vcs-Git: https://salsa.debian.org/debian/lieer.git
