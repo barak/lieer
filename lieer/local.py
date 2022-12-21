@@ -475,7 +475,7 @@ class Local:
       return None
 
   def __make_maildir_name__ (self, m, labels):
-    # http://cr.yp.to/proto/maildir.html
+    # https://cr.yp.to/proto/maildir.html
     ext = ''
     if self.config.file_extension:
         ext = '.' + self.config.file_extension
@@ -619,10 +619,10 @@ class Local:
         print ("done.")
 
         if not os.path.exists (fname):
-          raise Local.RepositoryException ("tried to update tags on non-existant file: %s" % fname)
+          raise Local.RepositoryException ("tried to update tags on non-existent file: %s" % fname)
 
       else:
-        print ("(dry-run) tried to update tags on non-existant file: %s" % fname)
+        print ("(dry-run) tried to update tags on non-existent file: %s" % fname)
 
     try:
       nmsg = db.get(fname)

@@ -99,19 +99,19 @@ class Gmailieer:
     parser_send.add_argument ('-d', '--dry-run', action='store_true',
         default = False, help = 'do not actually send message')
 
-    # Ignored arguments for sendmail compatability
+    # Ignored arguments for sendmail compatibility
     if '-oi' in sys.argv:
       sys.argv.remove('-oi')
 
     if '-i' in sys.argv:
       sys.argv.remove('-i')
 
-    parser_send.add_argument('-i', action='store_true', default = None, help = 'Ignored: always implied, allowed for sendmail compatability.', dest = 'i3')
+    parser_send.add_argument('-i', action='store_true', default = None, help = 'Ignored: always implied, allowed for sendmail compatibility.', dest = 'i3')
     parser_send.add_argument('-t', '--read-recipients', action='store_true',
                              default = False, dest = 'read_recipients',
                              help = 'Read recipients from message headers. This is always done by GMail. If this option is not specified, the same addresses (as those in the headers) must be specified as additional arguments.')
 
-    parser_send.add_argument('-f', type = str, help = 'Ignored: has no effect, allowed for sendmail compatability.', dest = 'i1')
+    parser_send.add_argument('-f', type = str, help = 'Ignored: has no effect, allowed for sendmail compatibility.', dest = 'i1')
 
     parser_send.add_argument('recipients', nargs = '*', default = [],
         help = 'Recipients to send this message to (these are essentially ignored, but they are validated against the header fields.)')
@@ -735,7 +735,7 @@ class Gmailieer:
 
     Returns:
       list of messages which were updated, these have also been updated in Notmuch and
-      does not need to be partially upated.
+      does not need to be partially updated.
 
     """
 
@@ -817,7 +817,10 @@ class Gmailieer:
       repl = eml['In-Reply-To'].strip().strip('<>')
       self.vprint("looking for original message: %s" % repl)
       with notmuch2.Database(mode = notmuch2.Database.MODE.READ_ONLY) as db:
-        nmsg = db.find(repl)
+        try:
+          nmsg = db.find(repl)
+        except LookupError:
+          nmsg = None
         if nmsg is not None:
           (_, gids) = self.local.messages_to_gids([nmsg])
           if nmsg.header('Subject') != eml['Subject']:
