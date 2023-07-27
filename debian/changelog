@@ -1,3 +1,9 @@
+gmailieer (1.4-2) unstable; urgency=medium
+
+  * Track upstream, which now has a better --verbose
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Thu, 27 Jul 2023 17:49:47 +0100
+
 gmailieer (1.4-1) unstable; urgency=medium
 
   * New upstream version (just the version number)
