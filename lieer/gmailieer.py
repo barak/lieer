@@ -47,6 +47,10 @@ class Gmailieer:
     common.add_argument ('-q', '--quiet', action = 'store_true',
         default = False, help = 'Produce less output (implies -s)')
 
+    common.add_argument ('-v', '--verbose', action='store_true',
+        default = False, help = 'print list of changes')
+
+
     subparsers = parser.add_subparsers (help = 'actions', dest = 'action')
     subparsers.required = True
 
@@ -272,6 +276,7 @@ class Gmailieer:
         raise NotADirectoryError("error: %s is not a valid path!" % args.path)
 
     self.dry_run          = dry_run
+    self.verbose          = args.verbose
     self.HAS_TQDM         = (not args.no_progress)
     self.credentials_file = args.credentials
 
