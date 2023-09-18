@@ -1,3 +1,10 @@
+gmailieer (1.5-1) unstable; urgency=medium
+
+  * New upstream version
+    - swizzles oauth library
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Mon, 18 Sep 2023 15:27:20 +0100
+
 gmailieer (1.4-2) unstable; urgency=medium
 
   * Track upstream, which now has a better --verbose
