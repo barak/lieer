@@ -1,8 +1,9 @@
-gmailieer (1.5-2) unstable; urgency=medium
+gmailieer (1.6-1) unstable; urgency=medium
 
   * Add README.Debian with authentication fix report
+  * New upstream version
 
- -- Barak A. Pearlmutter <bap@debian.org>  Tue, 07 Nov 2023 16:17:35 +0000
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 07 Nov 2023 16:19:41 +0000
 
 gmailieer (1.5-1) unstable; urgency=medium
 
