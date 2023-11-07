@@ -1,0 +1,14 @@
+In the upgrade to 1.5, previously valid authentication information was
+lost. And, there are some issues with regenerating the authentication.
+
+Here is one report from someone who got it to work:
+
+  I had the a problem with "gmi init", on a text-only remote session.
+
+  I copied the link thrown out by gmi and used it on another machine
+  with google login to authenticate. The google login tries to go back
+  to localhost:8080 with the authenticated response link. I copied
+  that and pasted in the ssh session within elinks (text browser). It
+  worked.
+
+ -- Barak A. Pearlmutter <bap@debian.org>, Tue,  7 Nov 2023 16:17:09 +0000
