@@ -1,6 +1,6 @@
-gmailieer (1.6-2) UNRELEASED; urgency=medium
+gmailieer (1.6-2) unstable; urgency=medium
 
-  * Track upstream changes
+  * Track upstream changes (closes: 1053227)
 
  -- Barak A. Pearlmutter <bap@debian.org>  Wed, 20 Dec 2023 16:22:33 +0000
 
