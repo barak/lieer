@@ -18,15 +18,16 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
+import argparse
 import os
 import sys
-import argparse
+
 import googleapiclient
 import googleapiclient.errors
 import notmuch2
 
-from .remote import Remote
 from .local import Local
+from .remote import Remote
 
 
 class Gmailieer:
@@ -619,7 +620,7 @@ class Gmailieer:
 
         if self.list_labels:
             for k, l in self.remote.labels.items():
-                print("{0: <30} {1}".format(l, k))
+                print(f"{l: <30} {k}")
             return
 
         if self.force:
@@ -855,14 +856,11 @@ class Gmailieer:
                 previous.delete()
                 previous = self.load_resume(resume_file, last_id)
 
-        for mset in self.remote.all_messages():
-            (total, gids) = mset
-
+        for total, gids in self.remote.all_messages():
             self.bar.total = total
             self.bar_update(len(gids))
 
-            for m in gids:
-                message_gids.append(m["id"])
+            message_gids.extend(m["id"] for m in gids)
 
             if self.limit is not None and len(message_gids) >= self.limit:
                 break
@@ -938,10 +936,7 @@ class Gmailieer:
         """
 
         if len(msgids) > 0:
-            if resume:
-                total = len(msgids) + len(previous.meta_fetched)
-            else:
-                total = len(msgids)
+            total = len(msgids) + len(previous.meta_fetched) if resume else len(msgids)
 
             self.bar_create(leave=True, total=total, desc="receiving metadata")
 
@@ -1050,7 +1045,7 @@ class Gmailieer:
                         ", ".join(cli_recipients.difference(header_recipients))
                     )
                 )
-        elif not header_recipients == cli_recipients:
+        elif header_recipients != cli_recipients:
             raise ValueError(
                 "Recipients passed via sendmail(1) arguments ({}) differ from those in message headers ({}), perhaps you are missing the '-t' option?".format(
                     ", ".join(cli_recipients), ", ".join(header_recipients)

@@ -17,11 +17,12 @@
 
 import os
 import time
+
 import googleapiclient
 from apiclient import discovery
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 
 class Remote:
@@ -73,8 +74,8 @@ class Remote:
     ]
 
     # these cannot be changed manually
-    read_only_labels = set(["SENT", "DRAFT"])
-    read_only_tags = set(["sent", "draft"])
+    read_only_labels = {"SENT", "DRAFT"}
+    read_only_tags = {"sent", "draft"}
 
     DEFAULT_IGNORE_LABELS = [
         "CATEGORY_PERSONAL",
@@ -89,7 +90,7 @@ class Remote:
     # query to use
     query = "-in:chats"
 
-    not_sync = set(["CHAT"])
+    not_sync = {"CHAT"}
 
     # used to indicate whether all messages that should be updated where updated
     all_updated = True
@@ -645,39 +646,33 @@ class Remote:
         if len(add) > 0 or len(rem) > 0:
             # check if this message has been changed remotely since last pull
             hist_id = int(gmsg["historyId"])
-            if hist_id > last_hist:
-                if not force:
-                    print(
-                        "update: remote has changed, will not update: %s (add: %s, rem: %s) (%d > %d)"
-                        % (gid, add, rem, hist_id, last_hist)
-                    )
-                    self.all_updated = False
-                    return None
+            if hist_id > last_hist and not force:
+                print(
+                    "update: remote has changed, will not update: %s (add: %s, rem: %s) (%d > %d)"
+                    % (gid, add, rem, hist_id, last_hist)
+                )
+                self.all_updated = False
+                return None
 
             if "TRASH" in add:
                 if "SPAM" in add:
                     print(
-                        "update: %s: Trying to add both TRASH and SPAM, dropping SPAM (add: %s, rem: %s)"
-                        % (gid, add, rem)
+                        f"update: {gid}: Trying to add both TRASH and SPAM, dropping SPAM (add: {add}, rem: {rem})"
                     )
                     add.remove("SPAM")
                 if "INBOX" in add:
                     print(
-                        "update: %s: Trying to add both TRASH and INBOX, dropping INBOX (add: %s, rem: %s)"
-                        % (gid, add, rem)
+                        f"update: {gid}: Trying to add both TRASH and INBOX, dropping INBOX (add: {add}, rem: {rem})"
                     )
                     add.remove("INBOX")
             elif "SPAM" in add:
                 if "INBOX" in add:
                     print(
-                        "update: %s: Trying to add both SPAM and INBOX, dropping INBOX (add: %s, rem: %s)"
-                        % (gid, add, rem)
+                        "update: {gid}: Trying to add both SPAM and INBOX, dropping INBOX (add: {add}, rem: {rem})"
                     )
                     add.remove("INBOX")
 
-            self.print_changes(
-                "gid: %s: add: %s, remove: %s" % (gid, str(add), str(rem))
-            )
+            self.print_changes(f"gid: {gid}: add: {str(add)}, remove: {str(rem)}")
             if self.dry_run:
                 return None
             else:
