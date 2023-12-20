@@ -1,3 +1,9 @@
+gmailieer (1.6-2) UNRELEASED; urgency=medium
+
+  * Track upstream changes
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Wed, 20 Dec 2023 16:22:33 +0000
+
 gmailieer (1.6-1) unstable; urgency=medium
 
   * Add README.Debian with authentication fix report
