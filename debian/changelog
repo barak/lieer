@@ -1,3 +1,10 @@
+gmailieer (1.6-3) unstable; urgency=medium
+
+  * Handle the old pre-1.8 python3-google-auth we have in the archive;
+    and make sure we write credentials in an atomic way.
+
+ -- Julian Andres Klode <jak@debian.org>  Tue, 05 Mar 2024 11:59:25 +0100
+
 gmailieer (1.6-2) unstable; urgency=medium
 
   * Track upstream changes (closes: 1053227)
