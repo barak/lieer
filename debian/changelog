@@ -1,3 +1,10 @@
+gmailieer (1.6-4) unstable; urgency=medium
+
+  * Flush local fix, instead track upstream changes that handle Debian's
+    ancient oauth library, which is an adapted version of the Debian fix.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Sun, 07 Apr 2024 21:40:47 +0100
+
 gmailieer (1.6-3) unstable; urgency=medium
 
   * Handle the old pre-1.8 python3-google-auth we have in the archive;
