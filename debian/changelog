@@ -1,3 +1,10 @@
+gmailieer (1.6-5) unstable; urgency=medium
+
+  * Track upstream changes, mainly documentation, tiny cleanups like not
+    installing tests.
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Sun, 19 Jan 2025 15:30:16 +0000
+
 gmailieer (1.6-4) unstable; urgency=medium
 
   * Flush local fix, instead track upstream changes that handle Debian's
