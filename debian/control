@@ -6,7 +6,7 @@ Uploaders: Julian Andres Klode <jak@debian.org>,
 	   Barak A. Pearlmutter <bap@debian.org>
 Build-Depends: debhelper-compat (= 13),
 	       help2man,
-	       dh-python,
+	       dh-sequence-python3,
 	       python3-all:any,
 	       python3-pytest,
 	       python3-googleapi,

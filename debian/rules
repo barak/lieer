@@ -5,7 +5,7 @@ include /usr/share/dpkg/pkg-info.mk
 export PYBUILD_INSTALL_ARGS=--install-lib=/usr/share/lieer/ --install-scripts=/usr/share/lieer/
 
 %:
-	dh $@ --without python2 --with python3 --buildsystem=pybuild
+	dh $@ --buildsystem=pybuild
 
 execute_after_dh_auto_build: debian/gmi.1
 
