@@ -42,7 +42,7 @@ This assumes your root mail folder is in `~/.mail` and that this folder is _alre
 
    All commands should be run from the local mail repository unless otherwise specified.
 
-2. Ignore the `.json` files in notmuch. Any tags listed in `new.tags` will be added to newly pulled messages. Process tags on new messages directly after running gmi, or run `notmuch new` to trigger the `post-new` hook for [initial tagging](https://notmuchmail.org/initial_tagging/). The `new.tags` are not ignored by default if you do not remove them, but you can prevent custom tags from being pushed to the remote by using e.g. `gmi set --ignore-tags-local new`. In your notmuch config file (usually `~/.notmuch-config`):
+2. Ignore the `.json` files in notmuch. Any tags listed in `new.tags` will be added to newly pulled messages (but see [Caveats](#caveats)). Process tags on new messages directly after running gmi, or run `notmuch new` to trigger the `post-new` hook for [initial tagging](https://notmuchmail.org/initial_tagging/). The `new.tags` are not ignored by default if you do not remove them, but you can prevent custom tags from being pushed to the remote by using e.g. `gmi set --ignore-tags-local new`. In your notmuch config file (usually `~/.notmuch-config`):
 
    ```
    [new]
@@ -220,11 +220,25 @@ We translate some of the GMail labels to other tags. The default map of labels t
   'DRAFT'     : 'draft',
   'CHAT'      : 'chat',
 
-  'CATEGORY_PERSONAL'     : 'personal',
-  'CATEGORY_SOCIAL'       : 'social',
-  'CATEGORY_PROMOTIONS'   : 'promotions',
-  'CATEGORY_UPDATES'      : 'updates',
-  'CATEGORY_FORUMS'       : 'forums',
+  'CATEGORY_PERSONAL'   : 'personal',
+  'CATEGORY_SOCIAL'     : 'social',
+  'CATEGORY_PROMOTIONS' : 'promotions',
+  'CATEGORY_UPDATES'    : 'updates',
+  'CATEGORY_FORUMS'     : 'forums',
+
+  'BLUE_STAR'   : 'blue_star',
+  'GREEN_STAR'  : 'green_star',
+  'ORANGE_STAR' : 'orange_star',
+  'PURPLE_STAR' : 'purple_star',
+  'RED_STAR'    : 'red_star',
+  'YELLOW_STAR' : 'yellow_star',
+
+  'BLUE_CIRCLE'   : 'blue_circle',
+  'GREEN_CIRCLE'  : 'green_circle',
+  'ORANGE_CIRCLE' : 'orange_circle',
+  'PURPLE_CIRCLE' : 'purple_circle',
+  'RED_CIRCLE'    : 'red_circle',
+  'YELLOW_CIRCLE' : 'yellow_circle',
 ```
 
 The 'trash' local tag can be replaced using the `--local-trash-tag` option.
@@ -246,14 +260,18 @@ In any case, you can generate your own OAuth 2 credentials instead. This require
     - For `Application type`, select `Desktop app`
     - For `Name`, name it `Lieer` or `gmi client` or something you'll recognize
 
-![A screenshot of the GCP OAuth 2 credential creation dialog](create-credentials.png)
+![A screenshot of the GCP OAuth 2 credential creation dialog](/docs/create-credentials.png)
 
 5. [Download the credentials](https://console.cloud.google.com/auth/clients) by clicking the little download icon next to your newly created OAuth 2 client ID
     - This will download the `client_secret.json` file you need for Lieer.
 
-![A screenshot of a mouse hovering over the "Download JSON" icon](download-json.png)
+![A screenshot of a mouse hovering over the "Download JSON" icon](/docs/download-json.png)
 
 Store the `client_secret.json` file somewhere safe and specify it to `gmi auth -c`. You can do this on a repository that is already initialized, possibly using `-f` to force reauthorizing with the new client secrets.
+
+## Debugging
+
+- ["Something went wrong"](https://github.com/gauteh/lieer/issues/306)): Ensure you're logging in with username and password rather than selecting an already logged-in account. Ensure your logged out (or, use a private/incognito window) then open the auth url from `gmi auth ...` and log in with username and password.
 
 # Privacy policy
 
@@ -264,6 +282,8 @@ APIs will adhere to [Google API Services User Data Policy](https://developers.go
 including the Limited Use requirements
 
 # Caveats
+
+* By default, notmuch adds the tags `inbox` and `unread` to all newly imported message. While setting `new.tags` in the notmuch config should change the initial tagging of messages, it seems as though `new.tags` can also be set in the notmuch database and this overrides the config file during Lieer pulls. To ensure `new.tags` are applied correctly, set them directly in the notmuch database using `notmuch config set --database new.tags <tags>` in addition to your local config file.
 
 * The GMail API does not let you sync `muted` messages. Until [this Google
 bug](https://issuetracker.google.com/issues/36759067) is fixed, the `mute` and `muted` tags are not synchronized with the remote.
