@@ -1,3 +1,9 @@
+gmailieer (1.6-7) UNRELEASED; urgency=medium
+
+  * Update uscan watch file to version 5 github template
+
+ -- Barak A. Pearlmutter <bap@debian.org>  Tue, 16 Dec 2025 11:47:10 +0000
+
 gmailieer (1.6-6) unstable; urgency=medium
 
   * Track upstream changes, mainly documentation, minor bug fix

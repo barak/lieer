@@ -1,3 +1,4 @@
-version=4
-https://github.com/gauteh/lieer/tags \
- .*/v?@ANY_VERSION@@ARCHIVE_EXT@
+Version: 5
+Template: GitHub
+Owner: gauteh
+Project: lieer
